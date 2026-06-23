@@ -6,7 +6,7 @@
   <title>Arbre Généalogique</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -22,25 +22,25 @@
     </div>
     <nav class="header-nav">
       <button class="nav-btn" onclick="fitView()" title="Tout afficher">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
         Centrer
       </button>
-      <button class="nav-btn" onclick="zoomIn()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      <button class="nav-btn" onclick="zoomIn()" title="Zoom +">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
       </button>
-      <button class="nav-btn" onclick="zoomOut()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      <button class="nav-btn" onclick="zoomOut()" title="Zoom -">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
       </button>
       <button class="nav-btn accent" onclick="openAddModal(null)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Ajouter
       </button>
       <button class="nav-btn" onclick="openExport()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Exporter
       </button>
-      <button class="nav-btn" onclick="openSettings()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
+      <button class="nav-btn" onclick="openSettings()" title="Paramètres">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
       </button>
     </nav>
   </header>
@@ -79,10 +79,24 @@
         <button class="modal-close" onclick="closeModal('member-modal')">✕</button>
       </div>
       <div class="modal-body">
+
+        <!-- Photo Upload Area -->
+        <div class="form-group">
+          <label>Photo du membre</label>
+          <div class="photo-upload-area" id="photo-upload-area" onclick="document.getElementById('photo-file-input').click()" style="cursor:pointer">
+            <div class="photo-preview-thumb" id="photo-preview-thumb">📷</div>
+            <div class="photo-upload-info">
+              <p>Cliquer pour choisir une photo</p>
+              <small>JPG, PNG ou GIF — ou coller une URL ci-dessous</small>
+            </div>
+          </div>
+          <input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="handlePhotoFile(event)"/>
+        </div>
+
         <div class="form-row two-col">
           <div class="form-group">
             <label for="f-firstname">Prénom <span class="req">*</span></label>
-            <input type="text" id="f-firstname" placeholder="ex : Marie" autocomplete="off"/>
+            <input type="text" id="f-firstname" placeholder="ex : Marie" autocomplete="off" oninput="updatePhotoPreview()"/>
           </div>
           <div class="form-group">
             <label for="f-lastname">Nom de famille <span class="req">*</span></label>
@@ -91,7 +105,7 @@
         </div>
 
         <div class="form-group">
-          <label for="f-gender">Genre</label>
+          <label>Genre</label>
           <div class="radio-group">
             <label class="radio-label"><input type="radio" name="gender" value="M" id="g-m" checked/> Homme</label>
             <label class="radio-label"><input type="radio" name="gender" value="F" id="g-f"/> Femme</label>
@@ -141,8 +155,8 @@
         </div>
 
         <div class="form-group">
-          <label for="f-photo">URL photo (optionnel)</label>
-          <input type="url" id="f-photo" placeholder="https://…"/>
+          <label for="f-photo">URL photo (alternative)</label>
+          <input type="url" id="f-photo" placeholder="https://…" oninput="syncPhotoUrl()"/>
         </div>
       </div>
       <div class="modal-footer">
@@ -182,7 +196,7 @@
 
   <!-- ===== MODAL PARAMÈTRES ===== -->
   <div class="modal-overlay" id="settings-modal" aria-modal="true" role="dialog">
-    <div class="modal-box" style="max-width:400px">
+    <div class="modal-box" style="max-width:420px">
       <div class="modal-header">
         <h2 class="modal-title">Paramètres</h2>
         <button class="modal-close" onclick="closeModal('settings-modal')">✕</button>
@@ -226,7 +240,7 @@
         <button class="modal-close" onclick="closeModal('export-modal')">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px">Choisissez le format d'export :</p>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:16px">Choisissez le format d'export :</p>
         <div style="display:flex;flex-direction:column;gap:10px">
           <button class="export-option" onclick="exportSVG()">
             <span class="exp-icon">🖼</span>
@@ -248,9 +262,69 @@
   <!-- ===== TOAST ===== -->
   <div id="toast"></div>
 
-  <!-- ===== INPUT FICHIER CACHÉ ===== -->
+  <!-- ===== INPUT FICHIERS CACHÉS ===== -->
   <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleImport(event)"/>
 
   <script src="script.js"></script>
+
+  <!-- ===== PATCH : photo upload + preview dans le modal ===== -->
+  <script>
+    /* --- Photo file → base64 preview --- */
+    function handlePhotoFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const src = ev.target.result;
+        document.getElementById('f-photo').value = src;
+        renderPhotoThumb(src);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /* --- Sync quand l'URL est tapée manuellement --- */
+    function syncPhotoUrl() {
+      const url = document.getElementById('f-photo').value.trim();
+      renderPhotoThumb(url || null);
+    }
+
+    /* --- Affiche la vignette dans le modal --- */
+    function renderPhotoThumb(src) {
+      const thumb = document.getElementById('photo-preview-thumb');
+      if (src && src.length > 4) {
+        thumb.innerHTML = `<img src="${src}" alt="aperçu" onerror="this.parentElement.innerHTML='📷'"/>`;
+      } else {
+        const fn = (document.getElementById('f-firstname').value || '').trim();
+        thumb.innerHTML = fn ? fn.charAt(0).toUpperCase() : '📷';
+      }
+    }
+
+    /* --- Initiale dans le thumb quand le prénom change --- */
+    function updatePhotoPreview() {
+      const url = document.getElementById('f-photo').value.trim();
+      if (!url) {
+        const fn = (document.getElementById('f-firstname').value || '').trim();
+        const thumb = document.getElementById('photo-preview-thumb');
+        thumb.innerHTML = fn ? fn.charAt(0).toUpperCase() : '📷';
+        thumb.style.fontSize = fn ? '22px' : '22px';
+        thumb.style.color = fn ? 'var(--accent)' : 'var(--text-light)';
+        thumb.style.background = fn ? 'var(--accent-bg)' : 'var(--bg-canvas)';
+      }
+    }
+
+    /* --- Réinitialise le thumb à l'ouverture du modal --- */
+    const _origOpenAdd = typeof openAddModal !== 'undefined' ? openAddModal : null;
+    document.addEventListener('DOMContentLoaded', () => {
+      /* Reset du thumb à chaque ouverture (patch monkey) */
+      const observer = new MutationObserver(() => {
+        const modal = document.getElementById('member-modal');
+        if (modal.classList.contains('open')) {
+          const url = document.getElementById('f-photo').value.trim();
+          renderPhotoThumb(url || null);
+        }
+      });
+      observer.observe(document.getElementById('member-modal'), { attributes: true, attributeFilter: ['class'] });
+    });
+  </script>
 </body>
 </html>
