@@ -2,28 +2,49 @@
 /**
  * api.php — Arbre Généalogique
  * Backend PHP + SQLite (PDO)
- * Toutes les actions passent par ce fichier via fetch() côté JS
+ * Auth : bcrypt + sessions PHP sécurisées
+ * Photos : upload fichier serveur + validation
  */
 
 /* ─── Configuration ───────────────────────────────── */
-define('DB_PATH', __DIR__ . '/famille.db');   // fichier SQLite (créé automatiquement)
-define('ALLOWED_ORIGIN', '*');                // mettre ton domaine en prod : 'https://monsite.com'
+define('DB_PATH',       __DIR__ . '/famille.db');
+define('UPLOADS_DIR',   __DIR__ . '/uploads/');
+define('UPLOADS_URL',   'uploads/');
+define('ALLOWED_ORIGIN', '*');              // Mettre ton domaine en prod
+
+/* ─── Photo autorisées ────────────────────────────── */
+define('MAX_PHOTO_SIZE',  5 * 1024 * 1024); // 5 Mo côté serveur
+define('ALLOWED_MIME', ['image/jpeg','image/png','image/gif','image/webp']);
+define('ALLOWED_EXT',  ['jpg','jpeg','png','gif','webp']);
 
 /* ─── Headers CORS + JSON ─────────────────────────── */
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: '  . ALLOWED_ORIGIN);
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Credentials: true');
 
+/* ─── Session sécurisée ───────────────────────────── */
+ini_set('session.use_strict_mode',   '1');
+ini_set('session.cookie_httponly',   '1');
+ini_set('session.cookie_samesite',   'Lax');
+// En production HTTPS, décommenter :
+// ini_set('session.cookie_secure', '1');
 session_start();
 
-define('AUTH_USERNAME', 'wandji');
-define('AUTH_PASSWORD', 'password');
-
-// Répondre OK aux preflight OPTIONS (navigateurs modernes)
+/* ─── Preflight OPTIONS ───────────────────────────── */
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
+}
+
+/* ─── Dossier uploads ─────────────────────────────── */
+if (!is_dir(UPLOADS_DIR)) {
+    mkdir(UPLOADS_DIR, 0755, true);
+    // Bloquer l'exécution de scripts dans uploads/
+    file_put_contents(UPLOADS_DIR . '.htaccess',
+        "Options -ExecCGI\nAddHandler cgi-script .php .php3 .php4 .php5 .pl .py .jsp .asp .sh .cgi\nphp_flag engine off\n"
+    );
 }
 
 /* ─── Connexion PDO SQLite ────────────────────────── */
@@ -31,27 +52,37 @@ try {
     $pdo = new PDO('sqlite:' . DB_PATH);
     $pdo->setAttribute(PDO::ATTR_ERRMODE,            PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    // Activer les clés étrangères SQLite (désactivées par défaut)
     $pdo->exec('PRAGMA foreign_keys = ON;');
+    $pdo->exec('PRAGMA journal_mode = WAL;');
 } catch (Exception $e) {
     jsonError('Impossible d\'ouvrir la base de données : ' . $e->getMessage(), 500);
 }
 
-/* ─── Création des tables (si première exécution) ─── */
+/* ─── Création des tables ─────────────────────────── */
 $pdo->exec("
+    CREATE TABLE IF NOT EXISTS utilisateurs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        username    TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        display_name TEXT,
+        role        TEXT DEFAULT 'editor',   -- 'admin' | 'editor'
+        created_at  TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS membres (
-        id          TEXT PRIMARY KEY,         -- ID string unique (ex: 'lx3k9a2b')
+        id          TEXT PRIMARY KEY,
         firstname   TEXT NOT NULL,
         lastname    TEXT NOT NULL,
-        gender      TEXT DEFAULT 'M',         -- 'M', 'F', 'N'
-        birth       TEXT,                     -- 'YYYY-MM-DD'
+        gender      TEXT DEFAULT 'M',
+        birth       TEXT,
         birthplace  TEXT,
-        death       TEXT,                     -- 'YYYY-MM-DD' ou NULL
+        death       TEXT,
         deathplace  TEXT,
-        parent_id   TEXT,                     -- FK vers membres.id (nullable)
-        spouse_id   TEXT,                     -- FK vers membres.id (nullable)
+        parent_id   TEXT,
+        spouse_id   TEXT,
         notes       TEXT,
-        photo       TEXT,                     -- URL ou base64
+        photo       TEXT,
+        photo_file  TEXT,                    -- nom de fichier sur le serveur
         created_at  TEXT DEFAULT (datetime('now')),
         updated_at  TEXT DEFAULT (datetime('now'))
     );
@@ -62,7 +93,16 @@ $pdo->exec("
     );
 ");
 
-// Valeurs par défaut des paramètres
+/* ─── Utilisateur admin par défaut (première exécution) ── */
+$countUsers = (int)$pdo->query("SELECT COUNT(*) FROM utilisateurs")->fetchColumn();
+if ($countUsers === 0) {
+    // Remplacer ces valeurs lors du premier déploiement !
+    $defaultHash = password_hash('password', PASSWORD_BCRYPT, ['cost' => 12]);
+    $pdo->prepare("INSERT INTO utilisateurs (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)")
+        ->execute(['wandji', $defaultHash, 'Wandji', 'admin']);
+}
+
+/* ─── Paramètres par défaut ───────────────────────── */
 $pdo->exec("
     INSERT OR IGNORE INTO parametres (cle, valeur) VALUES
         ('treeName',    'Ma Famille'),
@@ -70,48 +110,142 @@ $pdo->exec("
         ('orientation', 'top');
 ");
 
-/* ─── Routeur d'actions ───────────────────────────── */
-// L'action vient soit en GET (?action=...) soit dans le body JSON POST
+/* ─── Routeur ─────────────────────────────────────── */
 $action = $_GET['action'] ?? null;
+$body   = [];
 
-// Pour les POST, on lit le body JSON
-$body = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $raw = file_get_contents('php://input');
-    $body = json_decode($raw, true) ?? [];
-    if (!$action) $action = $body['action'] ?? null;
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+
+    if (str_contains($contentType, 'multipart/form-data')) {
+        // Upload photo — données en $_POST + $_FILES
+        $body   = $_POST;
+        $action = $action ?? ($body['action'] ?? null);
+    } else {
+        $raw    = file_get_contents('php://input');
+        $body   = json_decode($raw, true) ?? [];
+        $action = $action ?? ($body['action'] ?? null);
+    }
 }
 
 switch ($action) {
 
+    /* ══════════════════════════════════════════════
+       AUTH
+    ══════════════════════════════════════════════ */
+
     case 'login':
         $username = trim($body['username'] ?? '');
-        $password = $body['password'] ?? '';
-        if ($username === AUTH_USERNAME && $password === AUTH_PASSWORD) {
-            $_SESSION['logged_in'] = true;
-            jsonOk(['message' => 'Connecté']);
+        $password = $body['password']      ?? '';
+
+        if (!$username || !$password) {
+            jsonError('Identifiants manquants', 400);
         }
-        jsonError('Nom d’utilisateur ou mot de passe incorrect', 401);
+
+        $pdo->exec("ALTER TABLE membres ADD COLUMN photo_file TEXT;");
+
+        $stmt = $pdo->prepare("SELECT * FROM utilisateurs WHERE username = ? COLLATE NOCASE LIMIT 1");
+        $stmt->execute([$username]);
+        $user = $stmt->fetch();
+
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            // Pause anti-bruteforce (200 ms)
+            usleep(200_000);
+            jsonError('Nom d\'utilisateur ou mot de passe incorrect', 401);
+        }
+
+        // Régénérer l'ID de session après connexion
+        session_regenerate_id(true);
+        $_SESSION['logged_in']    = true;
+        $_SESSION['user_id']      = $user['id'];
+        $_SESSION['username']     = $user['username'];
+        $_SESSION['display_name'] = $user['display_name'] ?: $user['username'];
+        $_SESSION['role']         = $user['role'];
+
+        jsonOk([
+            'message'      => 'Connecté',
+            'display_name' => $_SESSION['display_name'],
+            'role'         => $_SESSION['role'],
+        ]);
         break;
 
-    /* ── Charger tout (membres + paramètres) ── */
+    case 'logout':
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000,
+                $p['path'], $p['domain'], $p['secure'], $p['httponly']
+            );
+        }
+        session_destroy();
+        jsonOk(['message' => 'Déconnecté']);
+        break;
+
+    case 'me':
+        // Retourne l'état d'authentification courant (utilisé au chargement)
+        if (!empty($_SESSION['logged_in'])) {
+            jsonOk([
+                'logged_in'    => true,
+                'display_name' => $_SESSION['display_name'] ?? '',
+                'username'     => $_SESSION['username']     ?? '',
+                'role'         => $_SESSION['role']         ?? 'editor',
+            ]);
+        }
+        jsonOk(['logged_in' => false]);
+        break;
+
+    case 'change_password':
+        requireAuth();
+        $oldPw  = $body['old_password'] ?? '';
+        $newPw  = $body['new_password'] ?? '';
+        $userId = $_SESSION['user_id'];
+
+        if (strlen($newPw) < 8) {
+            jsonError('Le nouveau mot de passe doit comporter au moins 8 caractères', 422);
+        }
+
+        $stmt = $pdo->prepare("SELECT password_hash FROM utilisateurs WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user || !password_verify($oldPw, $user['password_hash'])) {
+            jsonError('Ancien mot de passe incorrect', 401);
+        }
+
+        $newHash = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 12]);
+        $pdo->prepare("UPDATE utilisateurs SET password_hash = ? WHERE id = ?")
+            ->execute([$newHash, $userId]);
+
+        jsonOk(['message' => 'Mot de passe modifié']);
+        break;
+
+    /* ══════════════════════════════════════════════
+       DONNÉES
+    ══════════════════════════════════════════════ */
+
     case 'load':
         $membres = $pdo->query("SELECT * FROM membres ORDER BY created_at ASC")->fetchAll();
-        // Convertir les clés snake_case → camelCase pour le JS
         $membres = array_map('rowToMember', $membres);
 
-        $rows = $pdo->query("SELECT cle, valeur FROM parametres")->fetchAll();
+        $rows   = $pdo->query("SELECT cle, valeur FROM parametres")->fetchAll();
         $params = [];
-        foreach ($rows as $r) {
-            $params[$r['cle']] = $r['valeur'];
-        }
-        // theme est un entier côté JS
+        foreach ($rows as $r) $params[$r['cle']] = $r['valeur'];
         $params['theme'] = (int)($params['theme'] ?? 0);
 
-        jsonOk(['members' => $membres, 'settings' => $params]);
+        // Retourner aussi l'état de session courant
+        $authInfo = ['logged_in' => false];
+        if (!empty($_SESSION['logged_in'])) {
+            $authInfo = [
+                'logged_in'    => true,
+                'display_name' => $_SESSION['display_name'] ?? '',
+                'username'     => $_SESSION['username']     ?? '',
+                'role'         => $_SESSION['role']         ?? 'editor',
+            ];
+        }
+
+        jsonOk(['members' => $membres, 'settings' => $params, 'auth' => $authInfo]);
         break;
 
-    /* ── Ajouter un membre ── */
     case 'add':
         requireAuth();
         $data = $body['member'] ?? $body;
@@ -122,9 +256,9 @@ switch ($action) {
         $stmt = $pdo->prepare("
             INSERT INTO membres
                 (id, firstname, lastname, gender, birth, birthplace, death, deathplace,
-                 parent_id, spouse_id, notes, photo)
+                 parent_id, spouse_id, notes, photo, photo_file)
             VALUES
-                (:id, :fn, :ln, :gd, :bi, :bp, :de, :dp, :pa, :sp, :no, :ph)
+                (:id,:fn,:ln,:gd,:bi,:bp,:de,:dp,:pa,:sp,:no,:ph,:pf)
         ");
         $stmt->execute([
             ':id' => $id,
@@ -139,21 +273,18 @@ switch ($action) {
             ':sp' => $data['spouseId']   ?? null,
             ':no' => $data['notes']      ?? null,
             ':ph' => $data['photo']      ?? null,
+            ':pf' => $data['photoFile']  ?? null,
         ]);
 
-        // Synchroniser le lien conjoint dans l'autre sens
         if (!empty($data['spouseId'])) {
             $pdo->prepare("UPDATE membres SET spouse_id = ?, updated_at = datetime('now') WHERE id = ?")
                 ->execute([$id, $data['spouseId']]);
         }
 
-        $nouveau = rowToMember(
-            $pdo->query("SELECT * FROM membres WHERE id = '$id'")->fetch()
-        );
+        $nouveau = rowToMember($pdo->prepare("SELECT * FROM membres WHERE id = ?")->execute([$id]) ? $pdo->query("SELECT * FROM membres WHERE id = '$id'")->fetch() : []);
         jsonOk(['member' => $nouveau, 'message' => 'Membre ajouté']);
         break;
 
-    /* ── Modifier un membre ── */
     case 'update':
         requireAuth();
         $data = $body['member'] ?? $body;
@@ -161,25 +292,17 @@ switch ($action) {
         if (!$id) jsonError('ID manquant', 400);
         validateMember($data);
 
-        // Ancien spouseId avant modification (pour nettoyer l'ancien lien)
         $old = $pdo->prepare("SELECT spouse_id FROM membres WHERE id = ?");
         $old->execute([$id]);
-        $oldRow = $old->fetch();
+        $oldRow      = $old->fetch();
         $oldSpouseId = $oldRow['spouse_id'] ?? null;
 
         $stmt = $pdo->prepare("
             UPDATE membres SET
-                firstname   = :fn,
-                lastname    = :ln,
-                gender      = :gd,
-                birth       = :bi,
-                birthplace  = :bp,
-                death       = :de,
-                deathplace  = :dp,
-                parent_id   = :pa,
-                spouse_id   = :sp,
-                notes       = :no,
-                photo       = :ph,
+                firstname   = :fn, lastname   = :ln, gender      = :gd,
+                birth       = :bi, birthplace = :bp, death       = :de,
+                deathplace  = :dp, parent_id  = :pa, spouse_id   = :sp,
+                notes       = :no, photo      = :ph, photo_file  = :pf,
                 updated_at  = datetime('now')
             WHERE id = :id
         ");
@@ -195,49 +318,127 @@ switch ($action) {
             ':sp' => $data['spouseId']   ?? null,
             ':no' => $data['notes']      ?? null,
             ':ph' => $data['photo']      ?? null,
+            ':pf' => $data['photoFile']  ?? null,
             ':id' => $id,
         ]);
 
-        // Nettoyer l'ancien conjoint si changé
         $newSpouseId = $data['spouseId'] ?? null;
         if ($oldSpouseId && $oldSpouseId !== $newSpouseId) {
             $pdo->prepare("UPDATE membres SET spouse_id = NULL, updated_at = datetime('now') WHERE id = ?")
                 ->execute([$oldSpouseId]);
         }
-        // Synchroniser le nouveau conjoint
         if ($newSpouseId) {
             $pdo->prepare("UPDATE membres SET spouse_id = ?, updated_at = datetime('now') WHERE id = ?")
                 ->execute([$id, $newSpouseId]);
         }
 
-        $updated = rowToMember(
-            $pdo->query("SELECT * FROM membres WHERE id = '$id'")->fetch()
-        );
+        $updated = rowToMember($pdo->query("SELECT * FROM membres WHERE id = '$id'")->fetch());
         jsonOk(['member' => $updated, 'message' => 'Membre modifié']);
         break;
 
-    /* ── Supprimer un membre ── */
     case 'delete':
         requireAuth();
         $id = $body['id'] ?? $_GET['id'] ?? null;
         if (!$id) jsonError('ID manquant', 400);
 
-        // Détacher les enfants (ils deviennent racines)
+        // Supprimer le fichier photo associé
+        $row = $pdo->prepare("SELECT photo_file FROM membres WHERE id = ?");
+        $row->execute([$id]);
+        $rowData = $row->fetch();
+        if ($rowData && $rowData['photo_file']) {
+            deletePhotoFile($rowData['photo_file']);
+        }
+
         $pdo->prepare("UPDATE membres SET parent_id = NULL, updated_at = datetime('now') WHERE parent_id = ?")
             ->execute([$id]);
-        // Nettoyer le lien conjoint de l'autre côté
         $pdo->prepare("UPDATE membres SET spouse_id = NULL, updated_at = datetime('now') WHERE spouse_id = ?")
             ->execute([$id]);
-        // Supprimer le membre
         $pdo->prepare("DELETE FROM membres WHERE id = ?")
             ->execute([$id]);
 
         jsonOk(['message' => 'Membre supprimé', 'deleted_id' => $id]);
         break;
 
-    /* ── Sauvegarder les paramètres ── */
+    /* ══════════════════════════════════════════════
+       UPLOAD PHOTO
+    ══════════════════════════════════════════════ */
+
+    case 'upload_photo':
+        requireAuth();
+
+        if (empty($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+            $errCode = $_FILES['photo']['error'] ?? -1;
+            $errMsg  = uploadErrorMessage($errCode);
+            jsonError('Erreur upload : ' . $errMsg, 400);
+        }
+
+        $file     = $_FILES['photo'];
+        $tmpPath  = $file['tmp_name'];
+        $origName = $file['name'];
+        $fileSize = $file['size'];
+
+        // ── Taille ──
+        if ($fileSize > MAX_PHOTO_SIZE) {
+            jsonError('Photo trop volumineuse (max 5 Mo côté serveur)', 413);
+        }
+
+        // ── MIME réel (finfo, pas la déclaration client) ──
+        $finfo    = new finfo(FILEINFO_MIME_TYPE);
+        $realMime = $finfo->file($tmpPath);
+        if (!in_array($realMime, ALLOWED_MIME, true)) {
+            jsonError('Format non autorisé. Utilisez JPG, PNG, GIF ou WebP.', 415);
+        }
+
+        // ── Extension ──
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (!in_array($ext, ALLOWED_EXT, true)) {
+            // Déduire l'extension depuis le MIME réel
+            $mimeToExt = ['image/jpeg'=>'jpg','image/png'=>'png','image/gif'=>'gif','image/webp'=>'webp'];
+            $ext = $mimeToExt[$realMime] ?? 'jpg';
+        }
+
+        // ── Vérification que c'est bien une image (GD) ──
+        $imageInfo = @getimagesize($tmpPath);
+        if (!$imageInfo) {
+            jsonError('Le fichier n\'est pas une image valide', 415);
+        }
+
+        // ── Nom de fichier aléatoire (pas de données utilisateur dans le nom) ──
+        $newName = bin2hex(random_bytes(16)) . '.' . $ext;
+        $destPath = UPLOADS_DIR . $newName;
+
+        if (!move_uploaded_file($tmpPath, $destPath)) {
+            jsonError('Impossible de déplacer le fichier uploadé', 500);
+        }
+
+        // Permissions restrictives
+        chmod($destPath, 0644);
+
+        // ── Supprimer l'ancien fichier si remplacement ──
+        $oldFile = $body['replace_file'] ?? null;
+        if ($oldFile) deletePhotoFile($oldFile);
+
+        jsonOk([
+            'file'    => $newName,
+            'url'     => UPLOADS_URL . $newName,
+            'message' => 'Photo uploadée',
+        ]);
+        break;
+
+    case 'delete_photo':
+        requireAuth();
+        $filename = $body['file'] ?? null;
+        if (!$filename) jsonError('Nom de fichier manquant', 400);
+        deletePhotoFile($filename);
+        jsonOk(['message' => 'Photo supprimée']);
+        break;
+
+    /* ══════════════════════════════════════════════
+       PARAMÈTRES
+    ══════════════════════════════════════════════ */
+
     case 'save_settings':
-        $s = $body['settings'] ?? $body;
+        $s       = $body['settings'] ?? $body;
         $allowed = ['treeName', 'theme', 'orientation'];
         foreach ($allowed as $key) {
             if (isset($s[$key])) {
@@ -248,17 +449,20 @@ switch ($action) {
         jsonOk(['message' => 'Paramètres sauvegardés']);
         break;
 
-    /* ── Tout effacer ── */
     case 'clear_all':
         requireAuth();
         $confirm = $body['confirm'] ?? false;
         if (!$confirm) jsonError('Confirmation requise', 400);
+
+        // Supprimer toutes les photos
+        $rows = $pdo->query("SELECT photo_file FROM membres WHERE photo_file IS NOT NULL")->fetchAll();
+        foreach ($rows as $r) deletePhotoFile($r['photo_file']);
+
         $pdo->exec("DELETE FROM membres");
         $pdo->exec("UPDATE parametres SET valeur = 'Ma Famille' WHERE cle = 'treeName'");
         jsonOk(['message' => 'Données effacées']);
         break;
 
-    /* ── Import JSON complet ── */
     case 'import':
         requireAuth();
         $members  = $body['members']  ?? [];
@@ -267,14 +471,16 @@ switch ($action) {
 
         $pdo->beginTransaction();
         try {
-            $pdo->exec("DELETE FROM membres");
+            // Supprimer les photos des membres qui vont être écrasés
+            $rows = $pdo->query("SELECT photo_file FROM membres WHERE photo_file IS NOT NULL")->fetchAll();
+            foreach ($rows as $r) deletePhotoFile($r['photo_file']);
 
+            $pdo->exec("DELETE FROM membres");
             $stmt = $pdo->prepare("
                 INSERT INTO membres
                     (id, firstname, lastname, gender, birth, birthplace, death, deathplace,
-                     parent_id, spouse_id, notes, photo)
-                VALUES
-                    (:id,:fn,:ln,:gd,:bi,:bp,:de,:dp,:pa,:sp,:no,:ph)
+                     parent_id, spouse_id, notes, photo, photo_file)
+                VALUES (:id,:fn,:ln,:gd,:bi,:bp,:de,:dp,:pa,:sp,:no,:ph,:pf)
             ");
             foreach ($members as $m) {
                 $stmt->execute([
@@ -290,9 +496,9 @@ switch ($action) {
                     ':sp' => $m['spouseId']   ?? null,
                     ':no' => $m['notes']      ?? null,
                     ':ph' => $m['photo']      ?? null,
+                    ':pf' => $m['photoFile']  ?? null,
                 ]);
             }
-
             if ($s) {
                 foreach (['treeName','theme','orientation'] as $key) {
                     if (isset($s[$key])) {
@@ -301,27 +507,31 @@ switch ($action) {
                     }
                 }
             }
-
             $pdo->commit();
         } catch (Exception $e) {
             $pdo->rollBack();
             jsonError('Erreur import : ' . $e->getMessage(), 500);
         }
-
         jsonOk(['message' => count($members) . ' membres importés', 'count' => count($members)]);
         break;
 
-    /* ── Action inconnue ── */
     default:
         jsonError('Action inconnue : ' . ($action ?? '(vide)'), 400);
 }
 
 /* ═══════════════════════════════════════════════════
    FONCTIONS UTILITAIRES
-   ═══════════════════════════════════════════════════ */
+═══════════════════════════════════════════════════ */
 
-/** Convertit une ligne SQL (snake_case) en objet JS (camelCase) */
 function rowToMember(array $row): array {
+    // Construire l'URL de la photo
+    $photoUrl = null;
+    if (!empty($row['photo_file'])) {
+        $photoUrl = UPLOADS_URL . $row['photo_file'];
+    } elseif (!empty($row['photo'])) {
+        $photoUrl = $row['photo'];
+    }
+
     return [
         'id'         => $row['id'],
         'firstname'  => $row['firstname'],
@@ -334,11 +544,11 @@ function rowToMember(array $row): array {
         'parentId'   => $row['parent_id']  ?? null,
         'spouseId'   => $row['spouse_id']  ?? null,
         'notes'      => $row['notes']      ?? null,
-        'photo'      => $row['photo']      ?? null,
+        'photo'      => $photoUrl,
+        'photoFile'  => $row['photo_file'] ?? null,
     ];
 }
 
-/** Valide les champs obligatoires d'un membre */
 function validateMember(array $data): void {
     if (empty(trim($data['firstname'] ?? ''))) jsonError('Le prénom est requis', 422);
     if (empty(trim($data['lastname']  ?? ''))) jsonError('Le nom est requis',    422);
@@ -350,13 +560,30 @@ function requireAuth(): void {
     }
 }
 
-/** Réponse JSON succès */
+function deletePhotoFile(string $filename): void {
+    // Sécurité : n'autoriser que des noms de fichiers simples (hex + extension)
+    if (!preg_match('/^[a-f0-9]{32}\.(jpg|jpeg|png|gif|webp)$/i', $filename)) return;
+    $path = UPLOADS_DIR . $filename;
+    if (file_exists($path)) @unlink($path);
+}
+
+function uploadErrorMessage(int $code): string {
+    return match($code) {
+        UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Fichier trop volumineux',
+        UPLOAD_ERR_PARTIAL  => 'Upload incomplet',
+        UPLOAD_ERR_NO_FILE  => 'Aucun fichier reçu',
+        UPLOAD_ERR_NO_TMP_DIR => 'Dossier temporaire manquant',
+        UPLOAD_ERR_CANT_WRITE => 'Impossible d\'écrire sur le disque',
+        UPLOAD_ERR_EXTENSION  => 'Extension PHP bloquée',
+        default => 'Erreur inconnue (code ' . $code . ')',
+    };
+}
+
 function jsonOk(array $data): void {
     echo json_encode(['ok' => true] + $data, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-/** Réponse JSON erreur */
 function jsonError(string $msg, int $code = 400): void {
     http_response_code($code);
     echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE);

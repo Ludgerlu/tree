@@ -785,3 +785,115 @@ input, select, textarea { font-family: inherit; }
   animation: spin .7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── BARRE DE STATUT UTILISATEUR ─────────────────── */
+.header-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.user-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  transition: border-color .2s, background .2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.user-status-bar.connected {
+  border-color: rgba(45, 90, 61, .3);
+  background: var(--accent-bg);
+}
+
+/* Pastille de statut (en ligne / hors ligne) */
+.user-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(45, 90, 61, .2);
+  animation: pulse-dot 2.5s ease-in-out infinite;
+}
+.user-status-dot.offline {
+  background: var(--text-light);
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(45,90,61,.2); }
+  50%       { box-shadow: 0 0 0 4px rgba(45,90,61,.08); }
+}
+
+/* Nom affiché */
+.user-status-name {
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Badge de rôle */
+.user-status-role {
+  font-size: 10px;
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+/* Bouton clé (changer mot de passe) */
+.user-status-pw {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: .6;
+  transition: opacity .15s, transform .15s;
+  line-height: 1;
+}
+.user-status-pw:hover {
+  opacity: 1;
+  transform: scale(1.15) rotate(-8deg);
+}
+
+/* ─── LOADING OVERLAY (override pour flex) ─────────── */
+#loading-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(4px);
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; font-size: 14px; color: var(--text-muted);
+}
+
+/* ─── RESPONSIVE user-status ───────────────────────── */
+@media (max-width: 768px) {
+  .user-status-bar { padding: 5px 8px; }
+  .user-status-role { display: none; }
+  .user-status-name { max-width: 80px; }
+}
+@media (max-width: 520px) {
+  .user-status-bar { display: none; }
+}
+
+/* ─── SUCCESS color var (si manquant) ───────────────── */
+:root { --success: #1D9E75; }

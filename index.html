@@ -21,6 +21,14 @@
       </div>
     </div>
     <nav class="header-nav">
+      <!-- Statut utilisateur connecté -->
+      <div id="user-status-bar" class="user-status-bar">
+        <span class="user-status-dot offline"></span>
+        <span style="color:var(--text-light);font-style:italic">Non connecté</span>
+      </div>
+
+      <div class="header-sep"></div>
+
       <button class="nav-btn" onclick="fitView()" title="Tout afficher">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
         Centrer
@@ -88,15 +96,18 @@
       </div>
       <div class="modal-body">
 
-        <!-- Photo Upload Area -->
+        <!-- Photo Upload -->
         <div class="form-group">
           <label>Photo du membre</label>
           <div class="photo-upload-area" id="photo-upload-area">
-
-            <!-- Vignette / aperçu -->
-            <div class="photo-preview-thumb" id="photo-preview-thumb">📷</div>
-
-            <!-- Infos & actions -->
+            <div class="photo-preview-thumb" id="photo-preview-thumb">
+              <!-- Placeholder SVG par défaut -->
+              <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="32" cy="32" r="32" fill="var(--bg-canvas)"/>
+                <circle cx="32" cy="26" r="10" fill="var(--text-light)" opacity=".5"/>
+                <ellipse cx="32" cy="54" rx="18" ry="12" fill="var(--text-light)" opacity=".3"/>
+              </svg>
+            </div>
             <div class="photo-upload-info">
               <div class="photo-actions">
                 <button type="button" class="btn-photo-pick" onclick="document.getElementById('photo-file-input').click()">
@@ -108,22 +119,20 @@
                   Retirer
                 </button>
               </div>
-              <!-- Barre de compression -->
               <div id="compression-info" style="display:none">
-                <div class="compression-bar-wrap">
-                  <div class="compression-bar" id="compression-bar"></div>
-                </div>
+                <div class="compression-bar-wrap"><div class="compression-bar" id="compression-bar"></div></div>
                 <p class="compression-text" id="compression-text"></p>
               </div>
-              <p class="photo-hint">JPG · PNG · max 10 Mo — compression automatique</p>
+              <p class="photo-hint">JPG · PNG · WebP · max 5 Mo — upload serveur sécurisé</p>
             </div>
-
           </div>
-          <!-- Loader de compression -->
           <div id="upload-loader" style="display:none">
             <span class="upload-spinner"></span> Compression en cours…
           </div>
           <input type="file" id="photo-file-input" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" style="display:none" onchange="handlePhotoFile(event)"/>
+          <!-- Champs cachés : URL résultante et nom de fichier serveur -->
+          <input type="hidden" id="f-photo"/>
+          <input type="hidden" id="f-photo-file"/>
         </div>
 
         <div class="form-row two-col">
@@ -170,26 +179,17 @@
 
         <div class="form-group">
           <label for="f-parent">Parent (père ou mère)</label>
-          <select id="f-parent">
-            <option value="">— Aucun (ancêtre racine) —</option>
-          </select>
+          <select id="f-parent"><option value="">— Aucun (ancêtre racine) —</option></select>
         </div>
 
         <div class="form-group">
-          <label for="f-spouse">Conjoint(e) (lien affiché)</label>
-          <select id="f-spouse">
-            <option value="">— Aucun —</option>
-          </select>
+          <label for="f-spouse">Conjoint(e)</label>
+          <select id="f-spouse"><option value="">— Aucun —</option></select>
         </div>
 
         <div class="form-group">
           <label for="f-notes">Notes / Biographie</label>
           <textarea id="f-notes" rows="3" placeholder="Profession, anecdotes, lieu de vie…"></textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="f-photo">URL photo (alternative)</label>
-          <input type="url" id="f-photo" placeholder="https://…" oninput="syncPhotoUrl()"/>
         </div>
       </div>
       <div class="modal-footer">
@@ -205,18 +205,19 @@
   <div class="modal-overlay" id="auth-modal" aria-modal="true" role="dialog">
     <div class="modal-box" style="max-width:420px;">
       <div class="modal-header">
-        <h2 class="modal-title">Connexion requise</h2>
+        <h2 class="modal-title">Connexion</h2>
         <button class="modal-close" onclick="closeModal('auth-modal')">✕</button>
       </div>
       <div class="modal-body">
-        <p>Pour ajouter un membre, connectez-vous avec votre identifiant.</p>
+        <p class="text-muted" style="margin-bottom:18px">Connectez-vous pour modifier l'arbre généalogique.</p>
         <div class="form-group">
           <label for="auth-username">Nom d'utilisateur</label>
-          <input type="text" id="auth-username" placeholder="Ex: Evina" autocomplete="username" />
+          <input type="text" id="auth-username" placeholder="ex : wandji" autocomplete="username"/>
         </div>
         <div class="form-group">
           <label for="auth-password">Mot de passe</label>
-          <input type="password" id="auth-password" placeholder="Mot de passe" autocomplete="current-password" />
+          <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter') submitAuth()"/>
         </div>
         <div id="auth-error" class="auth-error"></div>
       </div>
@@ -224,6 +225,37 @@
         <div style="flex:1"></div>
         <button class="btn-ghost" onclick="closeModal('auth-modal')">Annuler</button>
         <button class="btn-primary" onclick="submitAuth()">Se connecter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL CHANGER MOT DE PASSE ===== -->
+  <div class="modal-overlay" id="change-password-modal" aria-modal="true" role="dialog">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-header">
+        <h2 class="modal-title">🔑 Changer le mot de passe</h2>
+        <button class="modal-close" onclick="closeModal('change-password-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="cp-old">Mot de passe actuel</label>
+          <input type="password" id="cp-old" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+        <div class="form-group">
+          <label for="cp-new">Nouveau mot de passe <span class="req">*</span></label>
+          <input type="password" id="cp-new" placeholder="8 caractères minimum" autocomplete="new-password"/>
+        </div>
+        <div class="form-group">
+          <label for="cp-confirm">Confirmer le nouveau mot de passe</label>
+          <input type="password" id="cp-confirm" placeholder="••••••••" autocomplete="new-password"
+            onkeydown="if(event.key==='Enter') submitChangePassword()"/>
+        </div>
+        <div id="cp-error" class="auth-error"></div>
+      </div>
+      <div class="modal-footer">
+        <div style="flex:1"></div>
+        <button class="btn-ghost" onclick="closeModal('change-password-modal')">Annuler</button>
+        <button class="btn-primary" onclick="submitChangePassword()">Modifier</button>
       </div>
     </div>
   </div>
@@ -239,12 +271,12 @@
         <div class="detail-hero">
           <div class="detail-avatar" id="detail-avatar"></div>
           <div class="detail-info">
-            <p id="detail-dates" class="detail-meta"></p>
+            <p id="detail-dates"  class="detail-meta"></p>
             <p id="detail-places" class="detail-meta"></p>
-            <p id="detail-gen" class="detail-gen-badge"></p>
+            <p id="detail-gen"    class="detail-gen-badge"></p>
           </div>
         </div>
-        <div id="detail-notes" class="detail-notes"></div>
+        <div id="detail-notes"  class="detail-notes"></div>
         <div id="detail-family" class="detail-family"></div>
       </div>
       <div class="modal-footer">
@@ -300,242 +332,170 @@
         <button class="modal-close" onclick="closeModal('export-modal')">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:16px">Choisissez le format d'export :</p>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:16px">Choisissez le format :</p>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <button class="export-option" onclick="exportSVG()">
-            <span class="exp-icon">🖼</span>
-            <div><strong>SVG</strong><br/><small>Image vectorielle, qualité maximale</small></div>
-          </button>
-          <button class="export-option" onclick="exportJSON()">
-            <span class="exp-icon">📄</span>
-            <div><strong>JSON</strong><br/><small>Données brutes, réimportables</small></div>
-          </button>
-          <button class="export-option" onclick="printTree()">
-            <span class="exp-icon">🖨</span>
-            <div><strong>Imprimer</strong><br/><small>Mise en page pour impression</small></div>
-          </button>
+          <button class="export-option" onclick="exportSVG()"><span class="exp-icon">🖼</span><div><strong>SVG</strong><br/><small>Image vectorielle, qualité maximale</small></div></button>
+          <button class="export-option" onclick="exportJSON()"><span class="exp-icon">📄</span><div><strong>JSON</strong><br/><small>Données brutes, réimportables</small></div></button>
+          <button class="export-option" onclick="printTree()"><span class="exp-icon">🖨</span><div><strong>Imprimer</strong><br/><small>Mise en page pour impression</small></div></button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ===== TOAST ===== -->
+  <!-- Toast + inputs cachés -->
   <div id="toast"></div>
-
-  <!-- ===== INPUT FICHIERS CACHÉS ===== -->
   <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleImport(event)"/>
 
   <script src="script.js"></script>
 
-  <!-- ===== IMAGE COMPRESSION + PHOTO MANAGEMENT ===== -->
+  <!-- ===== GESTION PHOTO (compression + aperçu) ===== -->
   <script>
-  /* ─────────────────────────────────────────────────────
-     image-compression.js adapté pour l'arbre généalogique
-     Source : SABC field sales management system
-     ───────────────────────────────────────────────────── */
-
   /**
-   * Compresse une image via Canvas
-   * Retourne une Promise<Blob>
+   * Compresse une image côté client avant envoi
    */
-  function compressImage(file, maxWidth = 500, maxHeight = 600, quality = 0.8) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onerror = () => reject(new Error('Erreur lecture fichier'));
-      reader.onload = function(event) {
-        const img = new Image();
-        img.onerror = () => reject(new Error('Image invalide'));
-
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          let w = img.width, h = img.height;
-
-          // Conserver le ratio — ne pas agrandir
-          const ratio = Math.min(maxWidth / w, maxHeight / h);
-          if (ratio < 1) {
-            w = Math.round(w * ratio);
-            h = Math.round(h * ratio);
-          }
-
-          canvas.width  = w;
-          canvas.height = h;
-
-          const ctx = canvas.getContext('2d');
-          ctx.imageSmoothingEnabled  = true;
-          ctx.imageSmoothingQuality  = 'high';
-          ctx.drawImage(img, 0, 0, w, h);
-
-          canvas.toBlob(blob => {
-            if (blob) {
-              console.log(`[Photo] Compressée : ${w}×${h}px — ${(blob.size/1024).toFixed(1)} KB`);
-              resolve(blob);
-            } else {
-              reject(new Error('Canvas toBlob a échoué'));
-            }
-          }, 'image/jpeg', quality);
+  function compressImage(file, maxWidth=500, maxHeight=600, quality=0.82) {
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onerror=()=>reject(new Error('Lecture impossible'));
+      reader.onload=ev=>{
+        const img=new Image();
+        img.onerror=()=>reject(new Error('Image invalide'));
+        img.onload=()=>{
+          const canvas=document.createElement('canvas');
+          let w=img.width,h=img.height;
+          const ratio=Math.min(maxWidth/w,maxHeight/h);
+          if(ratio<1){w=Math.round(w*ratio);h=Math.round(h*ratio);}
+          canvas.width=w; canvas.height=h;
+          const ctx=canvas.getContext('2d');
+          ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+          ctx.drawImage(img,0,0,w,h);
+          canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Blob vide')),'image/jpeg',quality);
         };
-
-        img.src = event.target.result;
+        img.src=ev.target.result;
       };
-
       reader.readAsDataURL(file);
     });
   }
 
-  /**
-   * Gère l'upload : HEIC, taille max, compression adaptative, aperçu
-   */
   async function handlePhotoFile(e) {
-    const input = e.target;
-    const file  = input.files[0];
-    if (!file) return;
+    const input=e.target, file=input.files[0];
+    if(!file) return;
+    const thumb=document.getElementById('photo-preview-thumb');
+    const loader=document.getElementById('upload-loader');
+    const infoBox=document.getElementById('compression-info');
+    const bar=document.getElementById('compression-bar');
+    const barText=document.getElementById('compression-text');
 
-    const thumb    = document.getElementById('photo-preview-thumb');
-    const loader   = document.getElementById('upload-loader');
-    const infoBox  = document.getElementById('compression-info');
-    const bar      = document.getElementById('compression-bar');
-    const barText  = document.getElementById('compression-text');
-    const btnRem   = document.getElementById('btn-photo-remove');
-
-    // Réinitialiser l'UI
-    infoBox.style.display = 'none';
-    thumb.style.opacity   = '0.45';
-    loader.style.display  = 'flex';
+    // Réinitialiser
+    infoBox.style.display='none'; thumb.style.opacity='0.45'; loader.style.display='flex';
 
     try {
-      /* ── Validation HEIC ── */
-      const isHEIC = file.type === 'image/heic' || file.type === 'image/heif'
-                  || /\.heic$/i.test(file.name)  || /\.heif$/i.test(file.name);
-      if (isHEIC) {
+      // Validation format HEIC
+      if(/\.heic$|\.heif$/i.test(file.name)){
         alert('Format HEIC non supporté. Sur iPhone : Réglages › Appareil photo › Formats → "Le plus compatible".');
-        input.value = '';
-        return;
+        input.value=''; return;
       }
+      // Taille max 10 Mo côté client (le serveur limite à 5 Mo après compression)
+      if(file.size>10*1024*1024){ alert('Photo trop volumineuse (max 10 Mo).'); input.value=''; return; }
 
-      /* ── Taille maximale 10 Mo ── */
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Photo trop volumineuse (max 10 Mo). Choisissez une résolution plus faible.');
-        input.value = '';
-        return;
-      }
+      // Qualité adaptative
+      let quality=0.82,maxW=480,maxH=600;
+      if(file.size>3*1024*1024){quality=0.70;}
+      else if(file.size>1*1024*1024){quality=0.76;}
+      if(navigator.connection?.effectiveType==='2g'||navigator.connection?.effectiveType==='slow-2g'){quality=0.60;maxW=360;maxH=480;}
 
-      /* ── Qualité adaptative selon taille originale ── */
-      let quality   = 0.82;
-      let maxW = 480, maxH = 600;
+      const blob=await compressImage(file,maxW,maxH,quality);
 
-      if (file.size > 3 * 1024 * 1024) {
-        quality = 0.70; // > 3 Mo → compression forte
-      } else if (file.size > 1 * 1024 * 1024) {
-        quality = 0.76; // > 1 Mo → compression modérée
-      }
+      // Fichier compressé
+      const ts=Date.now(), base=file.name.replace(/\.[^.]+$/,'');
+      const compressedFile=new File([blob],`${base}_${ts}.jpg`,{type:'image/jpeg',lastModified:ts});
 
-      /* ── Adapter si connexion lente ── */
-      if (navigator.connection?.effectiveType === '2g' ||
-          navigator.connection?.effectiveType === 'slow-2g') {
-        quality = 0.60;
-        maxW = 360; maxH = 480;
-      }
+      // Remplacer dans l'input pour que saveMember() puisse l'envoyer
+      const dt=new DataTransfer(); dt.items.add(compressedFile); input.files=dt.files;
 
-      /* ── Compression ── */
-      const blob = await compressImage(file, maxW, maxH, quality);
-
-      /* ── Fichier compressé ── */
-      const ts   = Date.now();
-      const base = file.name.replace(/\.[^.]+$/, '');
-      const compressedFile = new File([blob], `${base}_${ts}.jpg`, {
-        type: 'image/jpeg',
-        lastModified: ts
-      });
-
-      /* ── Remplacer dans l'input ── */
-      const dt = new DataTransfer();
-      dt.items.add(compressedFile);
-      input.files = dt.files;
-
-      /* ── Calcul réduction ── */
-      const pct = Math.round((1 - blob.size / file.size) * 100);
-      const origKB = (file.size / 1024).toFixed(0);
-      const newKB  = (blob.size  / 1024).toFixed(0);
-
-      /* ── Base64 → f-photo + aperçu ── */
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const src = ev.target.result;
-        document.getElementById('f-photo').value = src;
-        renderPhotoThumb(src);
-
-        /* ── Barre de compression ── */
-        infoBox.style.display = 'block';
-        bar.style.width       = Math.max(4, 100 - pct) + '%';
-        bar.style.background  = pct >= 50 ? 'var(--success)' : pct >= 20 ? 'var(--accent)' : 'var(--text-light)';
-        barText.textContent   = `${origKB} KB → ${newKB} KB  (−${pct}%)`;
-
-        /* ── Toast ── */
-        if (window.showToast) showToast(`Photo optimisée : ${newKB} KB (−${pct}%)`, 'success');
+      // Aperçu immédiat
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        renderPhotoThumb(ev.target.result);
+        const pct=Math.round((1-blob.size/file.size)*100);
+        const origKB=(file.size/1024).toFixed(0), newKB=(blob.size/1024).toFixed(0);
+        infoBox.style.display='block';
+        bar.style.width=Math.max(4,100-pct)+'%';
+        bar.style.background=pct>=50?'var(--success)':pct>=20?'var(--accent)':'var(--text-light)';
+        barText.textContent=`${origKB} KB → ${newKB} KB  (−${pct}%)`;
+        if(window.showToast) showToast(`Photo prête : ${newKB} KB (−${pct}%)`);
       };
       reader.readAsDataURL(compressedFile);
 
-    } catch (err) {
-      console.error('[Photo] Erreur :', err);
-      alert('Erreur lors du traitement de la photo. Réessayez.');
-      input.value = '';
+    } catch(err) {
+      console.error('[Photo]',err);
+      alert('Erreur traitement photo. Réessayez.');
+      input.value='';
     } finally {
-      loader.style.display = 'none';
-      thumb.style.opacity  = '1';
+      loader.style.display='none'; thumb.style.opacity='1';
     }
   }
 
-  /* ─── Retire la photo ─────────────────────────────── */
   function removePhoto() {
-    document.getElementById('f-photo').value        = '';
-    document.getElementById('photo-file-input').value = '';
-    document.getElementById('compression-info').style.display = 'none';
-    document.getElementById('btn-photo-remove').style.display = 'none';
+    document.getElementById('f-photo').value='';
+    document.getElementById('f-photo-file').value='';
+    document.getElementById('photo-file-input').value='';
+    document.getElementById('compression-info').style.display='none';
+    document.getElementById('btn-photo-remove').style.display='none';
     renderPhotoThumb(null);
-    if (window.showToast) showToast('Photo retirée', 'info');
+    if(window.showToast) showToast('Photo retirée');
   }
 
-  /* ─── Affiche la vignette dans le modal ───────────── */
+  /** Affiche la vignette ou le placeholder SVG */
   function renderPhotoThumb(src) {
-    const thumb  = document.getElementById('photo-preview-thumb');
-    const btnRem = document.getElementById('btn-photo-remove');
-
-    if (src && src.length > 4) {
-      thumb.innerHTML = `<img src="${src}" alt="aperçu"
-        style="width:100%;height:100%;object-fit:cover;border-radius:50%"
-        onerror="this.closest('.photo-preview-thumb').innerHTML='📷'"/>`;
-      btnRem.style.display = 'flex';
+    const thumb=document.getElementById('photo-preview-thumb');
+    const btnRem=document.getElementById('btn-photo-remove');
+    if(src&&src.length>4) {
+      thumb.innerHTML=`<img src="${src}" alt="aperçu" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.closest('.photo-preview-thumb').innerHTML=placeholderSVGThumb()"/>`;
+      btnRem.style.display='flex';
     } else {
-      const fn = (document.getElementById('f-firstname')?.value || '').trim();
-      thumb.innerHTML = fn ? fn.charAt(0).toUpperCase() : '📷';
-      btnRem.style.display = 'none';
+      thumb.innerHTML=placeholderSVGThumb();
+      btnRem.style.display='none';
     }
   }
 
-  /* ─── Sync URL manuelle ───────────────────────────── */
+  function placeholderSVGThumb() {
+    const fn=(document.getElementById('f-firstname')?.value||'').trim();
+    const initiale=fn?fn.charAt(0).toUpperCase():'';
+    if(initiale) {
+      return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="32" fill="var(--accent-bg)"/>
+        <text x="32" y="36" text-anchor="middle" dominant-baseline="middle"
+          fill="var(--accent)" font-family="'Cormorant Garamond',Georgia,serif"
+          font-size="28" font-weight="600">${initiale}</text>
+      </svg>`;
+    }
+    return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="32" fill="var(--bg-canvas)"/>
+      <circle cx="32" cy="26" r="10" fill="var(--text-light)" opacity=".4"/>
+      <ellipse cx="32" cy="54" rx="18" ry="12" fill="var(--text-light)" opacity=".25"/>
+    </svg>`;
+  }
+
   function syncPhotoUrl() {
-    const url = document.getElementById('f-photo').value.trim();
-    renderPhotoThumb(url || null);
+    const url=document.getElementById('f-photo').value.trim();
+    renderPhotoThumb(url||null);
   }
 
-  /* ─── Initiale quand prénom change (sans photo) ───── */
   function updatePhotoPreview() {
-    const url = document.getElementById('f-photo').value.trim();
-    if (!url) renderPhotoThumb(null);
+    const url=document.getElementById('f-photo').value.trim();
+    if(!url) renderPhotoThumb(null);
   }
 
-  /* ─── Reset au MutationObserver (ouverture modal) ─── */
-  document.addEventListener('DOMContentLoaded', () => {
-    const modal = document.getElementById('member-modal');
-    const observer = new MutationObserver(() => {
-      if (modal.classList.contains('open')) {
-        const url = document.getElementById('f-photo').value.trim();
-        document.getElementById('compression-info').style.display = 'none';
-        renderPhotoThumb(url || null);
+  // Reset de l'aperçu à l'ouverture du modal
+  document.addEventListener('DOMContentLoaded',()=>{
+    const modal=document.getElementById('member-modal');
+    new MutationObserver(()=>{
+      if(modal.classList.contains('open')){
+        document.getElementById('compression-info').style.display='none';
+        renderPhotoThumb(document.getElementById('f-photo').value.trim()||null);
       }
-    });
-    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    }).observe(modal,{attributes:true,attributeFilter:['class']});
   });
   </script>
 </body>
