@@ -469,6 +469,13 @@ input, select, textarea { font-family: inherit; }
 }
 .btn-ghost:hover { background: var(--bg-canvas); border-color: var(--text-light); }
 
+.auth-error {
+  margin-top: 0;
+  color: var(--danger);
+  font-size: 0.95rem;
+  min-height: 1.35rem;
+}
+
 .btn-danger {
   padding: 9px 18px; border-radius: 8px;
   border: 1px solid #e0b0b0;

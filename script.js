@@ -16,6 +16,10 @@ let panX         = 40;
 let panY         = 40;
 let editingId    = null;   // id du membre en cours d'édition
 let detailOpenId = null;   // id du membre affiché dans la fiche détail
+let isAuthenticated = false;
+let pendingAddParentId = null;
+let pendingEditId = null;
+let pendingDeleteId = null;
 
 /* ─── Thèmes de couleur ───────────────────────────── */
 const THEMES = [
@@ -80,6 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadData();          // attend la réponse de l'API SQLite
   buildThemePicker();
   applyTheme(settings.theme);
+  updateAuthUI();
   renderTree();
   initPan();
   showLoading(false);
@@ -96,6 +101,7 @@ async function apiCall(action, body = {}) {
   try {
     const res = await fetch(API, {
       method : 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body   : JSON.stringify({ action, ...body })
     });
@@ -475,6 +481,11 @@ function fitView() {
 
 /* ─── MODAL MEMBRE ────────────────────────────────── */
 function openAddModal(parentId) {
+  if (!isAuthenticated) {
+    pendingAddParentId = parentId || null;
+    openAuthModal();
+    return;
+  }
   editingId = null;
   document.getElementById('modal-heading').textContent = 'Nouveau membre';
   document.getElementById('btn-delete').style.display = 'none';
@@ -485,6 +496,11 @@ function openAddModal(parentId) {
 }
 
 function openEditModal(id) {
+  if (!isAuthenticated) {
+    pendingEditId = id;
+    openAuthModal();
+    return;
+  }
   const m = members.find(x => x.id === id);
   if (!m) return;
   editingId = id;
@@ -495,6 +511,64 @@ function openEditModal(id) {
   document.getElementById('f-parent').value = m.parentId || '';
   document.getElementById('f-spouse').value = m.spouseId || '';
   openModal('member-modal');
+}
+
+function openAuthModal() {
+  document.getElementById('auth-username').value = '';
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-error').textContent = '';
+  openModal('auth-modal');
+}
+
+async function submitAuth() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+
+  try {
+    const res = await apiCall('login', { username, password });
+    isAuthenticated = true;
+    closeModal('auth-modal');
+    updateAuthUI();
+
+    if (pendingAddParentId !== null) {
+      const parentId = pendingAddParentId;
+      pendingAddParentId = null;
+      openAddModal(parentId);
+      return;
+    }
+    if (pendingEditId) {
+      const editId = pendingEditId;
+      pendingEditId = null;
+      openEditModal(editId);
+      return;
+    }
+    if (pendingDeleteId) {
+      const deleteId = pendingDeleteId;
+      pendingDeleteId = null;
+      deleteMember(deleteId);
+      return;
+    }
+
+    showToast(res.message || 'Connecté.');
+  } catch (err) {
+    document.getElementById('auth-error').textContent = err.message || 'Nom d’utilisateur ou mot de passe incorrect.';
+  }
+}
+
+function logout() {
+  isAuthenticated = false;
+  updateAuthUI();
+  showToast('Déconnecté.');
+}
+
+function updateAuthUI() {
+  const showAuth = isAuthenticated;
+  document.getElementById('btn-header-add').style.display = showAuth ? 'inline-flex' : 'none';
+  document.getElementById('btn-empty-add').style.display = showAuth ? 'inline-flex' : 'none';
+  document.getElementById('btn-header-login').style.display = showAuth ? 'none' : 'inline-flex';
+  document.getElementById('btn-header-logout').style.display = showAuth ? 'inline-flex' : 'none';
+  const detailEdit = document.getElementById('detail-edit-btn');
+  if (detailEdit) detailEdit.style.display = showAuth ? 'inline-flex' : 'none';
 }
 
 function fillForm(m) {
@@ -548,6 +622,12 @@ async function saveMember() {
   const spouseId = document.getElementById('f-spouse').value || null;
   const photo    = document.getElementById('f-photo').value.trim() || null;
 
+  if (!isAuthenticated) {
+    showToast('Connexion requise pour enregistrer.');
+    openAuthModal();
+    return;
+  }
+
   const memberData = {
     id         : editingId || uid(),
     firstname  : fn,
@@ -582,7 +662,7 @@ async function saveMember() {
     showToast(res.message || (editingId ? 'Membre modifié' : 'Membre ajouté'));
   } catch(e) { /* toast déjà affiché */ 
     // Le toast est déjà affiché par apiCall, mais on peut ajouter un message supplémentaire
-    console.error('saveMember error:', error);
+    console.error('saveMember error:', e);
   } finally {
     // Réactiver le bouton dans tous les cas
     btn.disabled = false;
@@ -593,12 +673,23 @@ async function saveMember() {
 
 function confirmDelete() {
   if (!editingId) return;
+  if (!isAuthenticated) {
+    pendingDeleteId = editingId;
+    openAuthModal();
+    return;
+  }
   const m = members.find(x => x.id === editingId);
   if (!confirm(`Supprimer ${m?.firstname} ${m?.lastname} ?`)) return;
   deleteMember(editingId);
 }
 
 async function deleteMember(id) {
+  if (!isAuthenticated) {
+    pendingDeleteId = id;
+    openAuthModal();
+    return;
+  }
+
   try {
     await apiCall('delete', { id });
 

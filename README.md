@@ -59,12 +59,16 @@ php -S localhost:8000
 
 ## Comment ça fonctionne
 
+> Les actions CRUD sur les membres sont réservées aux utilisateurs connectés.
+> Les boutons `Ajouter` et `Modifier` sont masqués avant authentification, et un bouton `Déconnexion` apparaît après connexion.
+
 ### Côté PHP (`api.php`)
 
 Un seul fichier gère tout. Il reçoit des requêtes POST avec un champ `action` :
 
 | Action          | Ce qu'elle fait                        |
 |-----------------|----------------------------------------|
+| `login`         | Authentifie l'utilisateur              |
 | `load`          | Retourne tous les membres + paramètres |
 | `add`           | Insère un nouveau membre               |
 | `update`        | Met à jour un membre existant          |
@@ -72,6 +76,9 @@ Un seul fichier gère tout. Il reçoit des requêtes POST avec un champ `action`
 | `save_settings` | Sauvegarde treeName, thème, orientation|
 | `import`        | Importe un JSON complet                |
 | `clear_all`     | Vide toute la table membres            |
+
+Par défaut, le projet utilise des identifiants codés en dur dans `api.php` :
+`wandji` / `password`. Ce comportement est à remplacer en production.
 
 ### Côté JS (`script.js`)
 
@@ -81,6 +88,8 @@ const res = await apiCall('add', { member: { firstname: 'Jean', ... } });
 ```
 
 Elle envoie un `fetch POST` vers `api.php` et retourne la réponse JSON.
+
+La connexion est gérée localement dans le navigateur via `script.js`, et le backend `api.php` vérifie la session avant d'autoriser `add`, `update`, `delete`, `clear_all` et `import`.
 
 ---
 
@@ -137,6 +146,8 @@ headers: {
   'X-Token': 'mon_mot_de_passe_secret'
 }
 ```
+
+> ℹ️ Par défaut, le projet utilise une authentification simple codée en dur dans `api.php` avec le nom d'utilisateur `wandji` et le mot de passe `password`. Changez-les immédiatement en production.
 
 ---
 

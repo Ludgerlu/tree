@@ -15,6 +15,11 @@ header('Access-Control-Allow-Origin: '  . ALLOWED_ORIGIN);
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
+session_start();
+
+define('AUTH_USERNAME', 'wandji');
+define('AUTH_PASSWORD', 'password');
+
 // Répondre OK aux preflight OPTIONS (navigateurs modernes)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -79,6 +84,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 switch ($action) {
 
+    case 'login':
+        $username = trim($body['username'] ?? '');
+        $password = $body['password'] ?? '';
+        if ($username === AUTH_USERNAME && $password === AUTH_PASSWORD) {
+            $_SESSION['logged_in'] = true;
+            jsonOk(['message' => 'Connecté']);
+        }
+        jsonError('Nom d’utilisateur ou mot de passe incorrect', 401);
+        break;
+
     /* ── Charger tout (membres + paramètres) ── */
     case 'load':
         $membres = $pdo->query("SELECT * FROM membres ORDER BY created_at ASC")->fetchAll();
@@ -98,6 +113,7 @@ switch ($action) {
 
     /* ── Ajouter un membre ── */
     case 'add':
+        requireAuth();
         $data = $body['member'] ?? $body;
         validateMember($data);
 
@@ -139,6 +155,7 @@ switch ($action) {
 
     /* ── Modifier un membre ── */
     case 'update':
+        requireAuth();
         $data = $body['member'] ?? $body;
         $id   = $data['id'] ?? null;
         if (!$id) jsonError('ID manquant', 400);
@@ -201,6 +218,7 @@ switch ($action) {
 
     /* ── Supprimer un membre ── */
     case 'delete':
+        requireAuth();
         $id = $body['id'] ?? $_GET['id'] ?? null;
         if (!$id) jsonError('ID manquant', 400);
 
@@ -232,6 +250,7 @@ switch ($action) {
 
     /* ── Tout effacer ── */
     case 'clear_all':
+        requireAuth();
         $confirm = $body['confirm'] ?? false;
         if (!$confirm) jsonError('Confirmation requise', 400);
         $pdo->exec("DELETE FROM membres");
@@ -241,6 +260,7 @@ switch ($action) {
 
     /* ── Import JSON complet ── */
     case 'import':
+        requireAuth();
         $members  = $body['members']  ?? [];
         $s        = $body['settings'] ?? null;
         if (!is_array($members)) jsonError('Format invalide', 400);
@@ -322,6 +342,12 @@ function rowToMember(array $row): array {
 function validateMember(array $data): void {
     if (empty(trim($data['firstname'] ?? ''))) jsonError('Le prénom est requis', 422);
     if (empty(trim($data['lastname']  ?? ''))) jsonError('Le nom est requis',    422);
+}
+
+function requireAuth(): void {
+    if (empty($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+        jsonError('Authentification requise', 401);
+    }
 }
 
 /** Réponse JSON succès */
