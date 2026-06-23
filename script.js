@@ -75,30 +75,60 @@ const GAP_Y   = 100;
 const PHOTO_R = 22;    // rayon de la photo dans le nœud
 
 /* ─── Init ────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  loadData();
+document.addEventListener('DOMContentLoaded', async () => {
+  showLoading(true);
+  await loadData();          // attend la réponse de l'API SQLite
   buildThemePicker();
   applyTheme(settings.theme);
   renderTree();
   initPan();
+  showLoading(false);
 });
 
-/* ─── Persistance ─────────────────────────────────── */
-function loadData() {
+/* ─── Configuration API ───────────────────────────── */
+const API = 'api.php';   // chemin vers api.php (même dossier)
+
+/* ─── Verrou de sauvegarde ─────────────────────────── */
+let isSaving = false; // verrou global
+
+/** Appel générique vers api.php */
+async function apiCall(action, body = {}) {
   try {
-    const raw = localStorage.getItem('arbre_members');
-    if (raw) members = JSON.parse(raw);
-  } catch(e) { members = []; }
-  try {
-    const rawS = localStorage.getItem('arbre_settings');
-    if (rawS) settings = { ...settings, ...JSON.parse(rawS) };
-  } catch(e) {}
-  document.getElementById('tree-name-display').textContent = settings.treeName;
+    const res = await fetch(API, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ action, ...body })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Erreur serveur');
+    return data;
+  } catch (err) {
+    showToast('Erreur : ' + err.message);
+    throw err;
+  }
 }
 
-function saveData() {
-  localStorage.setItem('arbre_members', JSON.stringify(members));
-  localStorage.setItem('arbre_settings', JSON.stringify(settings));
+/* ─── Persistance (SQLite via api.php) ────────────── */
+
+/** Chargement initial — remplace localStorage.getItem */
+async function loadData() {
+  try {
+    const data = await apiCall('load');
+    members  = data.members  || [];
+    settings = { ...settings, ...(data.settings || {}) };
+    settings.theme = parseInt(settings.theme) || 0;
+    document.getElementById('tree-name-display').textContent = settings.treeName;
+  } catch(e) {
+    // Si l'API est inaccessible, on démarre avec un tableau vide
+    members = [];
+  }
+}
+
+/** Sauvegarde des paramètres uniquement (les membres sont sauvés un par un) */
+async function saveData() {
+  try {
+    await apiCall('save_settings', { settings });
+  } catch(e) { /* silencieux — toast déjà affiché par apiCall */ }
 }
 
 /* ─── Génération d'ID ─────────────────────────────── */
@@ -129,6 +159,12 @@ function initials(m) {
   const f = (m.firstname || '').trim();
   const l = (m.lastname  || '').trim();
   return (f[0] || '') + (l[0] || '');
+}
+
+function compareMembers(a, b) {
+  const nameA = `${(a.lastname || '').trim()} ${(a.firstname || '').trim()}`.replace(/\s+/g, ' ').trim();
+  const nameB = `${(b.lastname || '').trim()} ${(b.firstname || '').trim()}`.replace(/\s+/g, ' ').trim();
+  return nameA.localeCompare(nameB, 'fr', { sensitivity: 'base' });
 }
 
 /* ─── RENDU ARBRE ─────────────────────────────────── */
@@ -307,21 +343,26 @@ function layoutTree() {
   const genMemo = {};
   members.forEach(m => getGen(m.id, genMemo));
 
-  // Grouper par génération
-  const byGen = {};
+  const childMap = {};
   members.forEach(m => {
-    const g = genMemo[m.id];
-    if (!byGen[g]) byGen[g] = [];
-    byGen[g].push(m);
+    if (m.parentId) {
+      childMap[m.parentId] = childMap[m.parentId] || [];
+      childMap[m.parentId].push(m);
+    }
   });
 
-  const gens = Object.keys(byGen).map(Number).sort((a, b) => a - b);
-
-  if (settings.orientation === 'top') {
-    // TOP → BOTTOM
+  const roots = members.filter(m => !m.parentId).slice().sort(compareMembers);
+  if (roots.length === 0) {
+    // Fallback to simple generation layout when no root is found
+    const byGen = {};
+    members.forEach(m => {
+      const g = genMemo[m.id];
+      if (!byGen[g]) byGen[g] = [];
+      byGen[g].push(m);
+    });
+    const gens = Object.keys(byGen).map(Number).sort((a, b) => a - b);
     gens.forEach(g => {
-      const row = byGen[g];
-      const rowW = row.length * NW + (row.length - 1) * GAP_X;
+      const row = byGen[g].slice().sort(compareMembers);
       row.forEach((m, i) => {
         positions[m.id] = {
           x: 40 + i * (NW + GAP_X),
@@ -329,18 +370,51 @@ function layoutTree() {
         };
       });
     });
-  } else {
-    // LEFT → RIGHT
-    gens.forEach(g => {
-      const col = byGen[g];
-      col.forEach((m, i) => {
-        positions[m.id] = {
-          x: 40 + g * (NW + GAP_Y),
-          y: 40 + i * (NH + GAP_X)
-        };
-      });
-    });
+    return positions;
   }
+
+  const orientationTop = settings.orientation === 'top';
+  const primarySize = orientationTop ? NW : NH;
+  const primaryGap  = GAP_X;
+  const secondaryStep = orientationTop ? NH + GAP_Y : NW + GAP_Y;
+
+  const extents = {};
+  let nextPrimary = 40;
+
+  function computeExtent(node) {
+    const children = (childMap[node.id] || []).slice().sort(compareMembers);
+    if (children.length === 0) {
+      const start = nextPrimary;
+      const end   = start + primarySize;
+      nextPrimary = end + primaryGap;
+      extents[node.id] = { start, end };
+      return extents[node.id];
+    }
+
+    const childExtents = children.map(computeExtent);
+    const start = childExtents[0].start;
+    const end   = childExtents[childExtents.length - 1].end;
+    extents[node.id] = { start, end };
+    return extents[node.id];
+  }
+
+  function assignPositions(node) {
+    const g = genMemo[node.id] || 0;
+    const e = extents[node.id];
+    const primary = e.start + (e.end - e.start - primarySize) / 2;
+
+    if (orientationTop) {
+      positions[node.id] = { x: primary, y: 40 + g * secondaryStep };
+    } else {
+      positions[node.id] = { x: 40 + g * secondaryStep, y: primary };
+    }
+
+    const children = (childMap[node.id] || []).slice().sort(compareMembers);
+    children.forEach(assignPositions);
+  }
+
+  roots.forEach(computeExtent);
+  roots.forEach(assignPositions);
 
   return positions;
 }
@@ -453,13 +527,18 @@ function populateSelects(excludeId) {
   const ps = document.getElementById('f-parent');
   const ss = document.getElementById('f-spouse');
   const opts = members.filter(m => m.id !== excludeId)
+    .slice()
+    .sort(compareMembers)
     .map(m => `<option value="${m.id}">${m.firstname} ${m.lastname}</option>`)
     .join('');
   ps.innerHTML = `<option value="">— Aucun (ancêtre racine) —</option>` + opts;
   ss.innerHTML = `<option value="">— Aucun —</option>` + opts;
 }
 
-function saveMember() {
+async function saveMember() {
+  if (isSaving) return;
+  const btn = document.getElementById('btn-save-member');
+  if (!btn) return;
   const fn = document.getElementById('f-firstname').value.trim();
   const ln = document.getElementById('f-lastname').value.trim();
   if (!fn || !ln) { showToast('Prénom et nom requis'); return; }
@@ -469,7 +548,8 @@ function saveMember() {
   const spouseId = document.getElementById('f-spouse').value || null;
   const photo    = document.getElementById('f-photo').value.trim() || null;
 
-  const data = {
+  const memberData = {
+    id         : editingId || uid(),
     firstname  : fn,
     lastname   : ln,
     gender,
@@ -483,27 +563,32 @@ function saveMember() {
     spouseId
   };
 
-  if (editingId) {
-    const idx = members.findIndex(m => m.id === editingId);
-    if (idx !== -1) members[idx] = { ...members[idx], ...data };
-    showToast('Membre modifié');
-  } else {
-    members.push({ id: uid(), ...data });
-    showToast('Membre ajouté');
-  }
+  // Désactiver le bouton et modifier son texte
+  isSaving = true;
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Enregistrement…';
 
-  // Synchroniser lien conjoint dans l'autre sens
-  if (spouseId) {
-    const sp = members.find(m => m.id === spouseId);
-    if (sp) {
-      const currentId = editingId || members[members.length - 1].id;
-      sp.spouseId = currentId;
-    }
-  }
+  try {
+    const action = editingId ? 'update' : 'add';
+    const res    = await apiCall(action, { member: memberData });
 
-  saveData();
-  closeModal('member-modal');
-  renderTree();
+    // Recharger tous les membres depuis la BDD (pour avoir les liens conjoints sync)
+    const fresh = await apiCall('load');
+    members = fresh.members || [];
+
+    closeModal('member-modal');
+    renderTree();
+    showToast(res.message || (editingId ? 'Membre modifié' : 'Membre ajouté'));
+  } catch(e) { /* toast déjà affiché */ 
+    // Le toast est déjà affiché par apiCall, mais on peut ajouter un message supplémentaire
+    console.error('saveMember error:', error);
+  } finally {
+    // Réactiver le bouton dans tous les cas
+    btn.disabled = false;
+    btn.textContent = originalText;
+    isSaving = false;
+  }
 }
 
 function confirmDelete() {
@@ -513,19 +598,23 @@ function confirmDelete() {
   deleteMember(editingId);
 }
 
-function deleteMember(id) {
-  // Nettoyer les références
-  members = members.map(m => ({
-    ...m,
-    parentId : m.parentId  === id ? null : m.parentId,
-    spouseId : m.spouseId  === id ? null : m.spouseId
-  }));
-  members = members.filter(m => m.id !== id);
-  saveData();
-  closeModal('member-modal');
-  closeModal('detail-modal');
-  renderTree();
-  showToast('Membre supprimé');
+async function deleteMember(id) {
+  try {
+    await apiCall('delete', { id });
+
+    // Mettre à jour le tableau local
+    members = members.map(m => ({
+      ...m,
+      parentId : m.parentId === id ? null : m.parentId,
+      spouseId : m.spouseId === id ? null : m.spouseId
+    }));
+    members = members.filter(m => m.id !== id);
+
+    closeModal('member-modal');
+    closeModal('detail-modal');
+    renderTree();
+    showToast('Membre supprimé');
+  } catch(e) { /* toast déjà affiché */ }
 }
 
 /* ─── FICHE DÉTAIL ────────────────────────────────── */
@@ -688,11 +777,11 @@ function openSettings() {
   openModal('settings-modal');
 }
 
-function saveSettings() {
+async function saveSettings() {
   settings.treeName    = document.getElementById('s-treename').value.trim() || 'Ma Famille';
   settings.orientation = document.querySelector('input[name="orient"]:checked')?.value || 'top';
   document.getElementById('tree-name-display').textContent = settings.treeName;
-  saveData();
+  await saveData();          // envoie à l'API SQLite
   closeModal('settings-modal');
   renderTree();
   showToast('Paramètres enregistrés');
@@ -788,18 +877,25 @@ function handleImport(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
+  reader.onload = async ev => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (data.members) members = data.members;
-      if (data.settings) settings = { ...settings, ...data.settings };
+      // Envoyer les données à l'API pour import en BDD
+      const res = await apiCall('import', {
+        members  : data.members  || [],
+        settings : data.settings || null
+      });
+      // Recharger depuis la BDD
+      const fresh = await apiCall('load');
+      members  = fresh.members || [];
+      settings = { ...settings, ...(fresh.settings || {}) };
+      settings.theme = parseInt(settings.theme) || 0;
       document.getElementById('tree-name-display').textContent = settings.treeName;
       applyTheme(settings.theme);
       buildThemePicker();
-      saveData();
       renderTree();
       closeModal('settings-modal');
-      showToast('Données importées — ' + members.length + ' membres');
+      showToast(res.message || 'Données importées');
     } catch {
       showToast('Fichier JSON invalide');
     }
@@ -809,13 +905,27 @@ function handleImport(e) {
 }
 
 /* ─── TOUT EFFACER ────────────────────────────────── */
-function clearAll() {
+async function clearAll() {
   if (!confirm('Effacer tous les membres ? Cette action est irréversible.')) return;
-  members = [];
-  saveData();
-  renderTree();
-  closeModal('settings-modal');
-  showToast('Arbre effacé');
+  try {
+    await apiCall('clear_all', { confirm: true });
+    members = [];
+    renderTree();
+    closeModal('settings-modal');
+    showToast('Arbre effacé');
+  } catch(e) { /* toast déjà affiché */ }
+}
+
+/* ─── INDICATEUR DE CHARGEMENT ────────────────────── */
+function showLoading(visible) {
+  let el = document.getElementById('loading-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-overlay';
+    el.innerHTML = `<div class="loading-spinner"></div><p>Chargement…</p>`;
+    document.body.appendChild(el);
+  }
+  el.style.display = visible ? 'flex' : 'none';
 }
 
 /* ─── TOAST ───────────────────────────────────────── */

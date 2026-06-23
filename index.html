@@ -83,14 +83,39 @@
         <!-- Photo Upload Area -->
         <div class="form-group">
           <label>Photo du membre</label>
-          <div class="photo-upload-area" id="photo-upload-area" onclick="document.getElementById('photo-file-input').click()" style="cursor:pointer">
+          <div class="photo-upload-area" id="photo-upload-area">
+
+            <!-- Vignette / aperçu -->
             <div class="photo-preview-thumb" id="photo-preview-thumb">📷</div>
+
+            <!-- Infos & actions -->
             <div class="photo-upload-info">
-              <p>Cliquer pour choisir une photo</p>
-              <small>JPG, PNG ou GIF — ou coller une URL ci-dessous</small>
+              <div class="photo-actions">
+                <button type="button" class="btn-photo-pick" onclick="document.getElementById('photo-file-input').click()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Choisir une photo
+                </button>
+                <button type="button" class="btn-photo-remove" id="btn-photo-remove" onclick="removePhoto()" style="display:none">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  Retirer
+                </button>
+              </div>
+              <!-- Barre de compression -->
+              <div id="compression-info" style="display:none">
+                <div class="compression-bar-wrap">
+                  <div class="compression-bar" id="compression-bar"></div>
+                </div>
+                <p class="compression-text" id="compression-text"></p>
+              </div>
+              <p class="photo-hint">JPG · PNG · max 10 Mo — compression automatique</p>
             </div>
+
           </div>
-          <input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="handlePhotoFile(event)"/>
+          <!-- Loader de compression -->
+          <div id="upload-loader" style="display:none">
+            <span class="upload-spinner"></span> Compression en cours…
+          </div>
+          <input type="file" id="photo-file-input" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" style="display:none" onchange="handlePhotoFile(event)"/>
         </div>
 
         <div class="form-row two-col">
@@ -163,7 +188,7 @@
         <button class="btn-danger" id="btn-delete" onclick="confirmDelete()" style="display:none">Supprimer</button>
         <div style="flex:1"></div>
         <button class="btn-ghost" onclick="closeModal('member-modal')">Annuler</button>
-        <button class="btn-primary" onclick="saveMember()">Enregistrer</button>
+        <button class="btn-primary" id="btn-save-member" onclick="saveMember()">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -267,64 +292,216 @@
 
   <script src="script.js"></script>
 
-  <!-- ===== PATCH : photo upload + preview dans le modal ===== -->
+  <!-- ===== IMAGE COMPRESSION + PHOTO MANAGEMENT ===== -->
   <script>
-    /* --- Photo file → base64 preview --- */
-    function handlePhotoFile(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+  /* ─────────────────────────────────────────────────────
+     image-compression.js adapté pour l'arbre généalogique
+     Source : SABC field sales management system
+     ───────────────────────────────────────────────────── */
+
+  /**
+   * Compresse une image via Canvas
+   * Retourne une Promise<Blob>
+   */
+  function compressImage(file, maxWidth = 500, maxHeight = 600, quality = 0.8) {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = function(ev) {
+
+      reader.onerror = () => reject(new Error('Erreur lecture fichier'));
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Image invalide'));
+
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+
+          // Conserver le ratio — ne pas agrandir
+          const ratio = Math.min(maxWidth / w, maxHeight / h);
+          if (ratio < 1) {
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+          }
+
+          canvas.width  = w;
+          canvas.height = h;
+
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled  = true;
+          ctx.imageSmoothingQuality  = 'high';
+          ctx.drawImage(img, 0, 0, w, h);
+
+          canvas.toBlob(blob => {
+            if (blob) {
+              console.log(`[Photo] Compressée : ${w}×${h}px — ${(blob.size/1024).toFixed(1)} KB`);
+              resolve(blob);
+            } else {
+              reject(new Error('Canvas toBlob a échoué'));
+            }
+          }, 'image/jpeg', quality);
+        };
+
+        img.src = event.target.result;
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Gère l'upload : HEIC, taille max, compression adaptative, aperçu
+   */
+  async function handlePhotoFile(e) {
+    const input = e.target;
+    const file  = input.files[0];
+    if (!file) return;
+
+    const thumb    = document.getElementById('photo-preview-thumb');
+    const loader   = document.getElementById('upload-loader');
+    const infoBox  = document.getElementById('compression-info');
+    const bar      = document.getElementById('compression-bar');
+    const barText  = document.getElementById('compression-text');
+    const btnRem   = document.getElementById('btn-photo-remove');
+
+    // Réinitialiser l'UI
+    infoBox.style.display = 'none';
+    thumb.style.opacity   = '0.45';
+    loader.style.display  = 'flex';
+
+    try {
+      /* ── Validation HEIC ── */
+      const isHEIC = file.type === 'image/heic' || file.type === 'image/heif'
+                  || /\.heic$/i.test(file.name)  || /\.heif$/i.test(file.name);
+      if (isHEIC) {
+        alert('Format HEIC non supporté. Sur iPhone : Réglages › Appareil photo › Formats → "Le plus compatible".');
+        input.value = '';
+        return;
+      }
+
+      /* ── Taille maximale 10 Mo ── */
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Photo trop volumineuse (max 10 Mo). Choisissez une résolution plus faible.');
+        input.value = '';
+        return;
+      }
+
+      /* ── Qualité adaptative selon taille originale ── */
+      let quality   = 0.82;
+      let maxW = 480, maxH = 600;
+
+      if (file.size > 3 * 1024 * 1024) {
+        quality = 0.70; // > 3 Mo → compression forte
+      } else if (file.size > 1 * 1024 * 1024) {
+        quality = 0.76; // > 1 Mo → compression modérée
+      }
+
+      /* ── Adapter si connexion lente ── */
+      if (navigator.connection?.effectiveType === '2g' ||
+          navigator.connection?.effectiveType === 'slow-2g') {
+        quality = 0.60;
+        maxW = 360; maxH = 480;
+      }
+
+      /* ── Compression ── */
+      const blob = await compressImage(file, maxW, maxH, quality);
+
+      /* ── Fichier compressé ── */
+      const ts   = Date.now();
+      const base = file.name.replace(/\.[^.]+$/, '');
+      const compressedFile = new File([blob], `${base}_${ts}.jpg`, {
+        type: 'image/jpeg',
+        lastModified: ts
+      });
+
+      /* ── Remplacer dans l'input ── */
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      input.files = dt.files;
+
+      /* ── Calcul réduction ── */
+      const pct = Math.round((1 - blob.size / file.size) * 100);
+      const origKB = (file.size / 1024).toFixed(0);
+      const newKB  = (blob.size  / 1024).toFixed(0);
+
+      /* ── Base64 → f-photo + aperçu ── */
+      const reader = new FileReader();
+      reader.onload = ev => {
         const src = ev.target.result;
         document.getElementById('f-photo').value = src;
         renderPhotoThumb(src);
+
+        /* ── Barre de compression ── */
+        infoBox.style.display = 'block';
+        bar.style.width       = Math.max(4, 100 - pct) + '%';
+        bar.style.background  = pct >= 50 ? 'var(--success)' : pct >= 20 ? 'var(--accent)' : 'var(--text-light)';
+        barText.textContent   = `${origKB} KB → ${newKB} KB  (−${pct}%)`;
+
+        /* ── Toast ── */
+        if (window.showToast) showToast(`Photo optimisée : ${newKB} KB (−${pct}%)`, 'success');
       };
-      reader.readAsDataURL(file);
-    }
+      reader.readAsDataURL(compressedFile);
 
-    /* --- Sync quand l'URL est tapée manuellement --- */
-    function syncPhotoUrl() {
-      const url = document.getElementById('f-photo').value.trim();
-      renderPhotoThumb(url || null);
+    } catch (err) {
+      console.error('[Photo] Erreur :', err);
+      alert('Erreur lors du traitement de la photo. Réessayez.');
+      input.value = '';
+    } finally {
+      loader.style.display = 'none';
+      thumb.style.opacity  = '1';
     }
+  }
 
-    /* --- Affiche la vignette dans le modal --- */
-    function renderPhotoThumb(src) {
-      const thumb = document.getElementById('photo-preview-thumb');
-      if (src && src.length > 4) {
-        thumb.innerHTML = `<img src="${src}" alt="aperçu" onerror="this.parentElement.innerHTML='📷'"/>`;
-      } else {
-        const fn = (document.getElementById('f-firstname').value || '').trim();
-        thumb.innerHTML = fn ? fn.charAt(0).toUpperCase() : '📷';
+  /* ─── Retire la photo ─────────────────────────────── */
+  function removePhoto() {
+    document.getElementById('f-photo').value        = '';
+    document.getElementById('photo-file-input').value = '';
+    document.getElementById('compression-info').style.display = 'none';
+    document.getElementById('btn-photo-remove').style.display = 'none';
+    renderPhotoThumb(null);
+    if (window.showToast) showToast('Photo retirée', 'info');
+  }
+
+  /* ─── Affiche la vignette dans le modal ───────────── */
+  function renderPhotoThumb(src) {
+    const thumb  = document.getElementById('photo-preview-thumb');
+    const btnRem = document.getElementById('btn-photo-remove');
+
+    if (src && src.length > 4) {
+      thumb.innerHTML = `<img src="${src}" alt="aperçu"
+        style="width:100%;height:100%;object-fit:cover;border-radius:50%"
+        onerror="this.closest('.photo-preview-thumb').innerHTML='📷'"/>`;
+      btnRem.style.display = 'flex';
+    } else {
+      const fn = (document.getElementById('f-firstname')?.value || '').trim();
+      thumb.innerHTML = fn ? fn.charAt(0).toUpperCase() : '📷';
+      btnRem.style.display = 'none';
+    }
+  }
+
+  /* ─── Sync URL manuelle ───────────────────────────── */
+  function syncPhotoUrl() {
+    const url = document.getElementById('f-photo').value.trim();
+    renderPhotoThumb(url || null);
+  }
+
+  /* ─── Initiale quand prénom change (sans photo) ───── */
+  function updatePhotoPreview() {
+    const url = document.getElementById('f-photo').value.trim();
+    if (!url) renderPhotoThumb(null);
+  }
+
+  /* ─── Reset au MutationObserver (ouverture modal) ─── */
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('member-modal');
+    const observer = new MutationObserver(() => {
+      if (modal.classList.contains('open')) {
+        const url = document.getElementById('f-photo').value.trim();
+        document.getElementById('compression-info').style.display = 'none';
+        renderPhotoThumb(url || null);
       }
-    }
-
-    /* --- Initiale dans le thumb quand le prénom change --- */
-    function updatePhotoPreview() {
-      const url = document.getElementById('f-photo').value.trim();
-      if (!url) {
-        const fn = (document.getElementById('f-firstname').value || '').trim();
-        const thumb = document.getElementById('photo-preview-thumb');
-        thumb.innerHTML = fn ? fn.charAt(0).toUpperCase() : '📷';
-        thumb.style.fontSize = fn ? '22px' : '22px';
-        thumb.style.color = fn ? 'var(--accent)' : 'var(--text-light)';
-        thumb.style.background = fn ? 'var(--accent-bg)' : 'var(--bg-canvas)';
-      }
-    }
-
-    /* --- Réinitialise le thumb à l'ouverture du modal --- */
-    const _origOpenAdd = typeof openAddModal !== 'undefined' ? openAddModal : null;
-    document.addEventListener('DOMContentLoaded', () => {
-      /* Reset du thumb à chaque ouverture (patch monkey) */
-      const observer = new MutationObserver(() => {
-        const modal = document.getElementById('member-modal');
-        if (modal.classList.contains('open')) {
-          const url = document.getElementById('f-photo').value.trim();
-          renderPhotoThumb(url || null);
-        }
-      });
-      observer.observe(document.getElementById('member-modal'), { attributes: true, attributeFilter: ['class'] });
     });
+    observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+  });
   </script>
 </body>
 </html>
