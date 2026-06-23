@@ -1,502 +1,938 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arbre Généalogique</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="style.css"/>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    /* ===== Custom styles (complement Bootstrap) ===== */
+    :root {
+      --bg-page: #f9f6f0;
+      --bg-canvas: #f0ece3;
+      --border: #ddd6c8;
+      --border-light: #ece8df;
+      --text-primary: #1c1610;
+      --text-muted: #6b6050;
+      --text-light: #a89880;
+      --accent: #2d5a3d;
+      --accent-bg: #e8f2ec;
+      --accent-dark: #1e3d29;
+      --danger: #b83232;
+      --gen0: #2d5a3d;
+      --gen1: #2d3d6b;
+      --gen2: #7a3b2e;
+      --gen3: #2e5568;
+      --gen4: #5a3068;
+      --gen0-light: #e8f2ec;
+      --gen1-light: #e8ecf7;
+      --gen2-light: #f5ece9;
+      --gen3-light: #e7f0f5;
+      --gen4-light: #f2edf5;
+    }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      color: var(--text-primary);
+      background: var(--bg-page);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #site-header {
+      flex-shrink: 0;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .logo-mark {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+    }
+    .site-title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      line-height: 1.2;
+    }
+    .site-subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .header-sep {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Legend bar */
+    #legend-bar {
+      flex-shrink: 0;
+      background: var(--bg-page);
+      border-bottom: 1px solid var(--border-light);
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    #legend-bar::-webkit-scrollbar {
+      height: 4px;
+    }
+    #legend-bar::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .leg-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+    .leg-swatch[data-gen="0"] { background: var(--gen0); }
+    .leg-swatch[data-gen="1"] { background: var(--gen1); }
+    .leg-swatch[data-gen="2"] { background: var(--gen2); }
+    .leg-swatch[data-gen="3"] { background: var(--gen3); }
+    .leg-swatch[data-gen="4"] { background: var(--gen4); }
+    .leg-gender {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .leg-gender.m { background: var(--gen1); }
+    .leg-gender.f { background: var(--gen2); }
+    .legend-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    #member-count {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-transform: none;
+      margin-left: auto;
+    }
+
+    /* Canvas */
+    #canvas-wrap {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      background: var(--bg-canvas);
+      background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+      background-size: 30px 30px;
+    }
+    #canvas-inner {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      cursor: grab;
+      user-select: none;
+    }
+    #canvas-inner:active { cursor: grabbing; }
+    #tree-svg {
+      display: block;
+      transition: transform .28s cubic-bezier(.25,.46,.45,.94);
+      transform-origin: 0 0;
+    }
+
+    /* Empty state */
+    #empty-state {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+      pointer-events: none;
+    }
+    #empty-state.show { display: flex; pointer-events: all; }
+    .empty-icon { font-size: 54px; }
+    .empty-title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 600;
+      font-size: 1.5rem;
+    }
+    .empty-sub {
+      color: var(--text-muted);
+      max-width: 300px;
+    }
+
+    /* User status */
+    .user-status-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--bg-page);
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+    .user-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+    .user-status-dot.offline {
+      background: var(--text-light);
+    }
+    .user-status-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .user-status-role {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+    }
+    .user-status-pw {
+      background: none;
+      border: none;
+      padding: 0 4px;
+      cursor: pointer;
+      opacity: .6;
+      font-size: 0.8rem;
+    }
+    .user-status-pw:hover { opacity: 1; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--text-primary);
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 9px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity .22s, transform .22s;
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,.13);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Modals (Bootstrap overrides) */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(28,22,16,.45);
+      z-index: 1050;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      max-height: 92vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0,0,0,.13);
+    }
+    .modal-header {
+      border-bottom: 1px solid var(--border-light);
+      padding: 1rem 1.5rem;
+    }
+    .modal-title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin: 0;
+    }
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-footer {
+      border-top: 1px solid var(--border-light);
+      padding: 0.75rem 1.5rem;
+      background: var(--bg-page);
+      border-radius: 0 0 16px 16px;
+    }
+
+    /* Photo upload */
+    .photo-upload-area {
+      border: 1.5px dashed var(--border);
+      border-radius: 10px;
+      background: var(--bg-page);
+      padding: 12px;
+    }
+    .photo-preview-thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--bg-canvas);
+      border: 2px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .photo-preview-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .compression-bar-wrap {
+      height: 5px;
+      background: var(--border-light);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .compression-bar {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width .4s ease;
+    }
+    .upload-spinner {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Detail modal */
+    .detail-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-canvas);
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--text-muted);
+    }
+    .detail-avatar[data-gen="0"] { border-color: var(--gen0); }
+    .detail-avatar[data-gen="1"] { border-color: var(--gen1); }
+    .detail-avatar[data-gen="2"] { border-color: var(--gen2); }
+    .detail-avatar[data-gen="3"] { border-color: var(--gen3); }
+    .detail-avatar[data-gen="4"] { border-color: var(--gen4); }
+    .detail-gen-badge {
+      display: inline-block;
+      padding: 2px 12px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: var(--bg-canvas);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .detail-notes {
+      background: var(--bg-canvas);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border-light);
+      font-style: italic;
+    }
+    .family-list {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .family-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--bg-page);
+      border: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .family-list li:hover {
+      background: var(--accent-bg);
+      border-color: var(--accent);
+    }
+    .family-mini-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.75rem;
+      font-family: 'Playfair Display', serif;
+    }
+    .family-mini-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .family-tag {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 1px 8px;
+      border-radius: 4px;
+      background: var(--bg-canvas);
+      color: var(--text-light);
+      border: 1px solid var(--border);
+      margin-left: auto;
+    }
+    .export-option {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-page);
+      text-align: left;
+      width: 100%;
+      transition: background .15s;
+    }
+    .export-option:hover {
+      background: var(--accent-bg);
+      border-color: var(--accent);
+    }
+    .theme-swatch {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform .15s, border-color .15s;
+    }
+    .theme-swatch:hover { transform: scale(1.1); }
+    .theme-swatch.active {
+      border-color: var(--text-primary);
+      box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text-primary);
+    }
+
+    /* Responsive fine-tuning */
+    @media (max-width: 576px) {
+      .site-title { font-size: 1rem; }
+      .nav-btn span.d-none.d-sm-inline { display: none !important; }
+      .user-status-name { max-width: 60px; }
+    }
+  </style>
 </head>
 <body>
 
-  <!-- ===== HEADER ===== -->
-  <header id="site-header">
-    <div class="header-left">
-      <div class="logo-mark">🌳</div>
+<!-- ===== HEADER (Bootstrap Navbar) ===== -->
+<header id="site-header" class="navbar navbar-expand-md py-0 px-2 px-md-4">
+  <div class="container-fluid px-0">
+    <div class="d-flex align-items-center gap-2">
+      <span class="logo-mark">🌳</span>
       <div>
-        <h1 class="site-title">Arbre Généalogique</h1>
-        <p class="site-subtitle" id="tree-name-display">Ma Famille</p>
+        <h1 class="site-title m-0">Arbre Généalogique</h1>
+        <p class="site-subtitle m-0" id="tree-name-display">Ma Famille</p>
       </div>
     </div>
-    <nav class="header-nav">
-      <!-- Statut utilisateur connecté -->
-      <div id="user-status-bar" class="user-status-bar">
-        <span class="user-status-dot offline"></span>
-        <span style="color:var(--text-light);font-style:italic">Non connecté</span>
+
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#headerNav" aria-controls="headerNav" aria-expanded="false" aria-label="Menu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="headerNav">
+      <div class="d-flex flex-wrap align-items-center gap-1 gap-md-2 ms-auto mt-2 mt-md-0">
+
+        <!-- Statut utilisateur -->
+        <div id="user-status-bar" class="user-status-bar">
+          <span class="user-status-dot offline"></span>
+          <span class="text-muted fst-italic">Non connecté</span>
+        </div>
+
+        <div class="header-sep d-none d-sm-block"></div>
+
+        <!-- Boutons -->
+        <button class="nav-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1" onclick="fitView()" title="Tout afficher">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
+          <span class="d-none d-sm-inline">Centrer</span>
+        </button>
+        <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="zoomIn()" title="Zoom +">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </button>
+        <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="zoomOut()" title="Zoom -">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="14" y2="11"/></svg>
+        </button>
+
+        <button id="btn-header-add" class="nav-btn btn btn-success btn-sm d-inline-flex align-items-center gap-1" onclick="openAddModal(null)" style="display:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span class="d-none d-sm-inline">Ajouter</span>
+        </button>
+
+        <button id="btn-header-login" class="nav-btn btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1" onclick="openAuthModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h10"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+          Connexion
+        </button>
+        <button id="btn-header-logout" class="nav-btn btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1" onclick="logout()" style="display:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Déconnexion
+        </button>
+
+        <button class="nav-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1" onclick="openExport()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span class="d-none d-sm-inline">Exporter</span>
+        </button>
+        <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="openSettings()" title="Paramètres">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
+        </button>
       </div>
-
-      <div class="header-sep"></div>
-
-      <button class="nav-btn" onclick="fitView()" title="Tout afficher">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
-        Centrer
-      </button>
-      <button class="nav-btn" onclick="zoomIn()" title="Zoom +">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-      </button>
-      <button class="nav-btn" onclick="zoomOut()" title="Zoom -">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-      </button>
-      <button id="btn-header-add" class="nav-btn accent" onclick="openAddModal(null)" style="display:none">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Ajouter
-      </button>
-      <button id="btn-header-login" class="nav-btn" onclick="openAuthModal()" title="Connexion">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3H5a2 2 0 00-2 2v14a2 2 0 002 2h10"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
-        Connexion
-      </button>
-      <button id="btn-header-logout" class="nav-btn" onclick="logout()" title="Déconnexion" style="display:none">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        Déconnexion
-      </button>
-      <button class="nav-btn" onclick="openExport()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Exporter
-      </button>
-      <button class="nav-btn" onclick="openSettings()" title="Paramètres">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M21 12h-2M5 12H3M12 21v-2M12 5V3"/></svg>
-      </button>
-    </nav>
-  </header>
-
-  <!-- ===== LÉGENDE ===== -->
-  <div id="legend-bar">
-    <div class="legend-item"><span class="leg-swatch" data-gen="0"></span> Génération 1</div>
-    <div class="legend-item"><span class="leg-swatch" data-gen="1"></span> Génération 2</div>
-    <div class="legend-item"><span class="leg-swatch" data-gen="2"></span> Génération 3</div>
-    <div class="legend-item"><span class="leg-swatch" data-gen="3"></span> Génération 4</div>
-    <div class="legend-item"><span class="leg-swatch" data-gen="4"></span> Génération 5</div>
-    <div class="legend-sep"></div>
-    <div class="legend-item"><span class="leg-gender m"></span> Homme</div>
-    <div class="legend-item"><span class="leg-gender f"></span> Femme</div>
-    <div class="legend-item" id="member-count">— membres</div>
-  </div>
-
-  <!-- ===== CANVAS ===== -->
-  <div id="canvas-wrap">
-    <div id="canvas-inner">
-      <svg id="tree-svg" xmlns="http://www.w3.org/2000/svg"></svg>
-    </div>
-    <div id="empty-state">
-      <div class="empty-icon">🌱</div>
-      <p class="empty-title">Votre arbre est vide</p>
-      <p class="empty-sub">Commencez par ajouter l'ancêtre fondateur de votre famille.</p>
-      <button id="btn-empty-add" class="btn-primary" onclick="openAddModal(null)" style="display:none">+ Ajouter le premier membre</button>
     </div>
   </div>
+</header>
 
-  <!-- ===== MODAL MEMBRE ===== -->
-  <div class="modal-overlay" id="member-modal" aria-modal="true" role="dialog">
-    <div class="modal-box" id="member-modal-box">
-      <div class="modal-header">
-        <h2 class="modal-title" id="modal-heading">Nouveau membre</h2>
-        <button class="modal-close" onclick="closeModal('member-modal')">✕</button>
-      </div>
-      <div class="modal-body">
+<!-- ===== LÉGENDE (scroll horizontal si trop long) ===== -->
+<div id="legend-bar" class="d-flex align-items-center gap-2 gap-sm-3 px-3 px-md-4 py-1">
+  <div class="legend-item"><span class="leg-swatch" data-gen="0"></span> G1</div>
+  <div class="legend-item"><span class="leg-swatch" data-gen="1"></span> G2</div>
+  <div class="legend-item"><span class="leg-swatch" data-gen="2"></span> G3</div>
+  <div class="legend-item"><span class="leg-swatch" data-gen="3"></span> G4</div>
+  <div class="legend-item"><span class="leg-swatch" data-gen="4"></span> G5</div>
+  <span class="legend-sep"></span>
+  <div class="legend-item"><span class="leg-gender m"></span> H</div>
+  <div class="legend-item"><span class="leg-gender f"></span> F</div>
+  <span class="ms-auto text-dark fw-semibold" id="member-count" style="font-size:0.75rem;">— membres</span>
+</div>
 
-        <!-- Photo Upload -->
-        <div class="form-group">
-          <label>Photo du membre</label>
-          <div class="photo-upload-area" id="photo-upload-area">
-            <div class="photo-preview-thumb" id="photo-preview-thumb">
-              <!-- Placeholder SVG par défaut -->
-              <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="32" cy="32" r="32" fill="var(--bg-canvas)"/>
-                <circle cx="32" cy="26" r="10" fill="var(--text-light)" opacity=".5"/>
-                <ellipse cx="32" cy="54" rx="18" ry="12" fill="var(--text-light)" opacity=".3"/>
-              </svg>
+<!-- ===== CANVAS ===== -->
+<div id="canvas-wrap">
+  <div id="canvas-inner">
+    <svg id="tree-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div id="empty-state">
+    <div class="empty-icon">🌱</div>
+    <h3 class="empty-title">Votre arbre est vide</h3>
+    <p class="empty-sub">Commencez par ajouter l'ancêtre fondateur.</p>
+    <button id="btn-empty-add" class="btn btn-success mt-2" onclick="openAddModal(null)" style="display:none">+ Ajouter le premier membre</button>
+  </div>
+</div>
+
+<!-- ===== MODALS (simplifiés) ===== -->
+<!-- Member Modal -->
+<div class="modal-overlay" id="member-modal">
+  <div class="modal-box" style="width:90%;max-width:560px;">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-heading">Nouveau membre</h2>
+      <button class="btn-close" onclick="closeModal('member-modal')"></button>
+    </div>
+    <div class="modal-body">
+      <!-- Photo upload (same as before) -->
+      <div class="mb-3">
+        <label class="form-label small text-uppercase fw-semibold text-muted">Photo</label>
+        <div class="photo-upload-area d-flex align-items-center gap-3">
+          <div class="photo-preview-thumb" id="photo-preview-thumb">
+            <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="var(--bg-canvas)"/><circle cx="32" cy="26" r="10" fill="var(--text-light)" opacity=".5"/><ellipse cx="32" cy="54" rx="18" ry="12" fill="var(--text-light)" opacity=".3"/></svg>
+          </div>
+          <div>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('photo-file-input').click()">Choisir</button>
+              <button type="button" class="btn btn-outline-danger btn-sm" id="btn-photo-remove" onclick="removePhoto()" style="display:none">Retirer</button>
             </div>
-            <div class="photo-upload-info">
-              <div class="photo-actions">
-                <button type="button" class="btn-photo-pick" onclick="document.getElementById('photo-file-input').click()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Choisir une photo
-                </button>
-                <button type="button" class="btn-photo-remove" id="btn-photo-remove" onclick="removePhoto()" style="display:none">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                  Retirer
-                </button>
-              </div>
-              <div id="compression-info" style="display:none">
-                <div class="compression-bar-wrap"><div class="compression-bar" id="compression-bar"></div></div>
-                <p class="compression-text" id="compression-text"></p>
-              </div>
-              <p class="photo-hint">JPG · PNG · WebP · max 5 Mo — upload serveur sécurisé</p>
+            <div id="compression-info" style="display:none" class="mt-1">
+              <div class="compression-bar-wrap"><div class="compression-bar" id="compression-bar"></div></div>
+              <p class="small text-muted mt-1" id="compression-text"></p>
             </div>
-          </div>
-          <div id="upload-loader" style="display:none">
-            <span class="upload-spinner"></span> Compression en cours…
-          </div>
-          <input type="file" id="photo-file-input" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" style="display:none" onchange="handlePhotoFile(event)"/>
-          <!-- Champs cachés : URL résultante et nom de fichier serveur -->
-          <input type="hidden" id="f-photo"/>
-          <input type="hidden" id="f-photo-file"/>
-        </div>
-
-        <div class="form-row two-col">
-          <div class="form-group">
-            <label for="f-firstname">Prénom <span class="req">*</span></label>
-            <input type="text" id="f-firstname" placeholder="ex : Marie" autocomplete="off" oninput="updatePhotoPreview()"/>
-          </div>
-          <div class="form-group">
-            <label for="f-lastname">Nom de famille <span class="req">*</span></label>
-            <input type="text" id="f-lastname" placeholder="ex : Dupont" autocomplete="off"/>
+            <p class="small text-muted mt-1">JPG · PNG · WebP · max 5 Mo</p>
           </div>
         </div>
-
-        <div class="form-group">
-          <label>Genre</label>
-          <div class="radio-group">
-            <label class="radio-label"><input type="radio" name="gender" value="M" id="g-m" checked/> Homme</label>
-            <label class="radio-label"><input type="radio" name="gender" value="F" id="g-f"/> Femme</label>
-            <label class="radio-label"><input type="radio" name="gender" value="N" id="g-n"/> Autre</label>
-          </div>
+        <div id="upload-loader" class="d-none align-items-center gap-2 mt-2 small text-muted">
+          <span class="upload-spinner"></span> Compression…
         </div>
+        <input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="handlePhotoFile(event)"/>
+        <input type="hidden" id="f-photo"/>
+        <input type="hidden" id="f-photo-file"/>
+      </div>
 
-        <div class="form-row two-col">
-          <div class="form-group">
-            <label for="f-birth">Date de naissance</label>
-            <input type="date" id="f-birth"/>
-          </div>
-          <div class="form-group">
-            <label for="f-birthplace">Lieu de naissance</label>
-            <input type="text" id="f-birthplace" placeholder="ex : Paris, France"/>
-          </div>
-        </div>
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label small text-uppercase fw-semibold text-muted">Prénom <span class="text-danger">*</span></label><input type="text" id="f-firstname" class="form-control form-control-sm" placeholder="Marie" oninput="updatePhotoPreview()"/></div>
+        <div class="col-6"><label class="form-label small text-uppercase fw-semibold text-muted">Nom <span class="text-danger">*</span></label><input type="text" id="f-lastname" class="form-control form-control-sm" placeholder="Dupont"/></div>
+      </div>
 
-        <div class="form-row two-col">
-          <div class="form-group">
-            <label for="f-death">Date de décès</label>
-            <input type="date" id="f-death"/>
-          </div>
-          <div class="form-group">
-            <label for="f-deathplace">Lieu de décès</label>
-            <input type="text" id="f-deathplace" placeholder="Laisser vide si vivant(e)"/>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="f-parent">Parent (père ou mère)</label>
-          <select id="f-parent"><option value="">— Aucun (ancêtre racine) —</option></select>
-        </div>
-
-        <div class="form-group">
-          <label for="f-spouse">Conjoint(e)</label>
-          <select id="f-spouse"><option value="">— Aucun —</option></select>
-        </div>
-
-        <div class="form-group">
-          <label for="f-notes">Notes / Biographie</label>
-          <textarea id="f-notes" rows="3" placeholder="Profession, anecdotes, lieu de vie…"></textarea>
+      <div class="mb-2">
+        <label class="form-label small text-uppercase fw-semibold text-muted">Genre</label>
+        <div class="d-flex gap-3">
+          <div class="form-check"><input class="form-check-input" type="radio" name="gender" value="M" id="g-m" checked/><label class="form-check-label" for="g-m">Homme</label></div>
+          <div class="form-check"><input class="form-check-input" type="radio" name="gender" value="F" id="g-f"/><label class="form-check-label" for="g-f">Femme</label></div>
+          <div class="form-check"><input class="form-check-input" type="radio" name="gender" value="N" id="g-n"/><label class="form-check-label" for="g-n">Autre</label></div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn-danger" id="btn-delete" onclick="confirmDelete()" style="display:none">Supprimer</button>
-        <div style="flex:1"></div>
-        <button class="btn-ghost" onclick="closeModal('member-modal')">Annuler</button>
-        <button class="btn-primary" id="btn-save-member" onclick="saveMember()">Enregistrer</button>
+
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label small text-uppercase fw-semibold text-muted">Naissance</label><input type="date" id="f-birth" class="form-control form-control-sm"/></div>
+        <div class="col-6"><label class="form-label small text-uppercase fw-semibold text-muted">Lieu</label><input type="text" id="f-birthplace" class="form-control form-control-sm" placeholder="Paris"/></div>
       </div>
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label small text-uppercase fw-semibold text-muted">Décès</label><input type="date" id="f-death" class="form-control form-control-sm"/></div>
+        <div class="col-6"><label class="form-label small text-uppercase fw-semibold text-muted">Lieu</label><input type="text" id="f-deathplace" class="form-control form-control-sm" placeholder="Lieu"/></div>
+      </div>
+
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Parent</label><select id="f-parent" class="form-select form-select-sm"><option value="">— Aucun —</option></select></div>
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Conjoint(e)</label><select id="f-spouse" class="form-select form-select-sm"><option value="">— Aucun —</option></select></div>
+      <div><label class="form-label small text-uppercase fw-semibold text-muted">Notes</label><textarea id="f-notes" class="form-control form-control-sm" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="btn-delete" onclick="confirmDelete()" style="display:none">Supprimer</button>
+      <div class="flex-grow-1"></div>
+      <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('member-modal')">Annuler</button>
+      <button class="btn btn-success btn-sm" id="btn-save-member" onclick="saveMember()">Enregistrer</button>
     </div>
   </div>
+</div>
 
-  <!-- ===== MODAL AUTHENTIFICATION ===== -->
-  <div class="modal-overlay" id="auth-modal" aria-modal="true" role="dialog">
-    <div class="modal-box" style="max-width:420px;">
-      <div class="modal-header">
-        <h2 class="modal-title">Connexion</h2>
-        <button class="modal-close" onclick="closeModal('auth-modal')">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted" style="margin-bottom:18px">Connectez-vous pour modifier l'arbre généalogique.</p>
-        <div class="form-group">
-          <label for="auth-username">Nom d'utilisateur</label>
-          <input type="text" id="auth-username" placeholder="ex : wandji" autocomplete="username"/>
-        </div>
-        <div class="form-group">
-          <label for="auth-password">Mot de passe</label>
-          <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"
-            onkeydown="if(event.key==='Enter') submitAuth()"/>
-        </div>
-        <div id="auth-error" class="auth-error"></div>
-      </div>
-      <div class="modal-footer">
-        <div style="flex:1"></div>
-        <button class="btn-ghost" onclick="closeModal('auth-modal')">Annuler</button>
-        <button class="btn-primary" onclick="submitAuth()">Se connecter</button>
-      </div>
+<!-- Auth Modal -->
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Connexion</h2>
+      <button class="btn-close" onclick="closeModal('auth-modal')"></button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted small">Connectez-vous pour modifier l'arbre.</p>
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Nom d'utilisateur</label><input type="text" id="auth-username" class="form-control form-control-sm" placeholder="wandji"/></div>
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Mot de passe</label><input type="password" id="auth-password" class="form-control form-control-sm" placeholder="••••••••" onkeydown="if(event.key==='Enter') submitAuth()"/></div>
+      <div id="auth-error" class="text-danger small"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('auth-modal')">Annuler</button>
+      <button class="btn btn-primary btn-sm" onclick="submitAuth()">Se connecter</button>
     </div>
   </div>
+</div>
 
-  <!-- ===== MODAL CHANGER MOT DE PASSE ===== -->
-  <div class="modal-overlay" id="change-password-modal" aria-modal="true" role="dialog">
-    <div class="modal-box" style="max-width:400px;">
-      <div class="modal-header">
-        <h2 class="modal-title">🔑 Changer le mot de passe</h2>
-        <button class="modal-close" onclick="closeModal('change-password-modal')">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="cp-old">Mot de passe actuel</label>
-          <input type="password" id="cp-old" placeholder="••••••••" autocomplete="current-password"/>
-        </div>
-        <div class="form-group">
-          <label for="cp-new">Nouveau mot de passe <span class="req">*</span></label>
-          <input type="password" id="cp-new" placeholder="8 caractères minimum" autocomplete="new-password"/>
-        </div>
-        <div class="form-group">
-          <label for="cp-confirm">Confirmer le nouveau mot de passe</label>
-          <input type="password" id="cp-confirm" placeholder="••••••••" autocomplete="new-password"
-            onkeydown="if(event.key==='Enter') submitChangePassword()"/>
-        </div>
-        <div id="cp-error" class="auth-error"></div>
-      </div>
-      <div class="modal-footer">
-        <div style="flex:1"></div>
-        <button class="btn-ghost" onclick="closeModal('change-password-modal')">Annuler</button>
-        <button class="btn-primary" onclick="submitChangePassword()">Modifier</button>
-      </div>
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="change-password-modal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-header">
+      <h2 class="modal-title">🔑 Changer le mot de passe</h2>
+      <button class="btn-close" onclick="closeModal('change-password-modal')"></button>
+    </div>
+    <div class="modal-body">
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Ancien</label><input type="password" id="cp-old" class="form-control form-control-sm" placeholder="••••••••"/></div>
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Nouveau <span class="text-danger">*</span></label><input type="password" id="cp-new" class="form-control form-control-sm" placeholder="8 caractères min"/></div>
+      <div class="mb-2"><label class="form-label small text-uppercase fw-semibold text-muted">Confirmer</label><input type="password" id="cp-confirm" class="form-control form-control-sm" placeholder="••••••••" onkeydown="if(event.key==='Enter') submitChangePassword()"/></div>
+      <div id="cp-error" class="text-danger small"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('change-password-modal')">Annuler</button>
+      <button class="btn btn-primary btn-sm" onclick="submitChangePassword()">Modifier</button>
     </div>
   </div>
+</div>
 
-  <!-- ===== MODAL FICHE DÉTAIL ===== -->
-  <div class="modal-overlay" id="detail-modal" aria-modal="true" role="dialog">
-    <div class="modal-box detail-box">
-      <div class="modal-header">
-        <h2 class="modal-title" id="detail-name">—</h2>
-        <button class="modal-close" onclick="closeModal('detail-modal')">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="detail-hero">
-          <div class="detail-avatar" id="detail-avatar"></div>
-          <div class="detail-info">
-            <p id="detail-dates"  class="detail-meta"></p>
-            <p id="detail-places" class="detail-meta"></p>
-            <p id="detail-gen"    class="detail-gen-badge"></p>
-          </div>
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-header">
+      <h2 class="modal-title" id="detail-name">—</h2>
+      <button class="btn-close" onclick="closeModal('detail-modal')"></button>
+    </div>
+    <div class="modal-body">
+      <div class="d-flex gap-3 mb-3">
+        <div class="detail-avatar" id="detail-avatar" data-gen="0">
+          <svg width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="var(--bg-canvas)"/><circle cx="40" cy="34" r="12" fill="var(--text-light)" opacity=".4"/><ellipse cx="40" cy="66" rx="20" ry="14" fill="var(--text-light)" opacity=".25"/></svg>
         </div>
-        <div id="detail-notes"  class="detail-notes"></div>
-        <div id="detail-family" class="detail-family"></div>
+        <div>
+          <p class="small text-muted" id="detail-dates"></p>
+          <p class="small text-muted" id="detail-places"></p>
+          <span class="detail-gen-badge" id="detail-gen"></span>
+        </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn-ghost" onclick="closeModal('detail-modal')">Fermer</button>
-        <button class="btn-primary" id="detail-edit-btn" onclick="editFromDetail()" style="display:none">✏ Modifier</button>
-      </div>
+      <div class="detail-notes mb-3" id="detail-notes"></div>
+      <div class="detail-family" id="detail-family"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('detail-modal')">Fermer</button>
+      <button class="btn btn-primary btn-sm" id="detail-edit-btn" onclick="editFromDetail()" style="display:none">✏ Modifier</button>
     </div>
   </div>
+</div>
 
-  <!-- ===== MODAL PARAMÈTRES ===== -->
-  <div class="modal-overlay" id="settings-modal" aria-modal="true" role="dialog">
-    <div class="modal-box" style="max-width:420px">
-      <div class="modal-header">
-        <h2 class="modal-title">Paramètres</h2>
-        <button class="modal-close" onclick="closeModal('settings-modal')">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="s-treename">Nom de l'arbre</label>
-          <input type="text" id="s-treename" placeholder="Ma Famille"/>
-        </div>
-        <div class="form-group">
-          <label>Thème de couleur</label>
-          <div class="theme-swatches" id="theme-picker"></div>
-        </div>
-        <div class="form-group">
-          <label>Orientation</label>
-          <div class="radio-group">
-            <label class="radio-label"><input type="radio" name="orient" value="top" checked/> Haut → Bas</label>
-            <label class="radio-label"><input type="radio" name="orient" value="left"/> Gauche → Droite</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Données</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-ghost" onclick="importData()">📥 Importer JSON</button>
-            <button class="btn-ghost" onclick="exportJSON()">📤 Exporter JSON</button>
-            <button class="btn-danger" onclick="clearAll()">🗑 Tout effacer</button>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-primary" onclick="saveSettings()">Enregistrer</button>
-      </div>
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Paramètres</h2>
+      <button class="btn-close" onclick="closeModal('settings-modal')"></button>
     </div>
-  </div>
-
-  <!-- ===== MODAL EXPORT ===== -->
-  <div class="modal-overlay" id="export-modal" aria-modal="true" role="dialog">
-    <div class="modal-box" style="max-width:380px">
-      <div class="modal-header">
-        <h2 class="modal-title">Exporter</h2>
-        <button class="modal-close" onclick="closeModal('export-modal')">✕</button>
+    <div class="modal-body">
+      <div class="mb-3"><label class="form-label small text-uppercase fw-semibold text-muted">Nom de l'arbre</label><input type="text" id="s-treename" class="form-control form-control-sm" placeholder="Ma Famille"/></div>
+      <div class="mb-3">
+        <label class="form-label small text-uppercase fw-semibold text-muted">Thème</label>
+        <div class="theme-swatches d-flex flex-wrap gap-2" id="theme-picker"></div>
       </div>
-      <div class="modal-body">
-        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:16px">Choisissez le format :</p>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <button class="export-option" onclick="exportSVG()"><span class="exp-icon">🖼</span><div><strong>SVG</strong><br/><small>Image vectorielle, qualité maximale</small></div></button>
-          <button class="export-option" onclick="exportJSON()"><span class="exp-icon">📄</span><div><strong>JSON</strong><br/><small>Données brutes, réimportables</small></div></button>
-          <button class="export-option" onclick="printTree()"><span class="exp-icon">🖨</span><div><strong>Imprimer</strong><br/><small>Mise en page pour impression</small></div></button>
+      <div class="mb-3">
+        <label class="form-label small text-uppercase fw-semibold text-muted">Orientation</label>
+        <div class="d-flex gap-3">
+          <div class="form-check"><input class="form-check-input" type="radio" name="orient" value="top" checked/><label class="form-check-label">Haut → Bas</label></div>
+          <div class="form-check"><input class="form-check-input" type="radio" name="orient" value="left"/><label class="form-check-label">Gauche → Droite</label></div>
+        </div>
+      </div>
+      <div>
+        <label class="form-label small text-uppercase fw-semibold text-muted">Données</label>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="importData()">📥 Importer JSON</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="exportJSON()">📤 Exporter JSON</button>
+          <button class="btn btn-outline-danger btn-sm" onclick="clearAll()">🗑 Tout effacer</button>
         </div>
       </div>
     </div>
+    <div class="modal-footer">
+      <button class="btn btn-success btn-sm" onclick="saveSettings()">Enregistrer</button>
+    </div>
   </div>
+</div>
 
-  <!-- Toast + inputs cachés -->
-  <div id="toast"></div>
-  <input type="file" id="file-input" accept=".json" style="display:none" onchange="handleImport(event)"/>
+<!-- Export Modal -->
+<div class="modal-overlay" id="export-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-header">
+      <h2 class="modal-title">Exporter</h2>
+      <button class="btn-close" onclick="closeModal('export-modal')"></button>
+    </div>
+    <div class="modal-body">
+      <p class="small text-muted mb-3">Choisissez le format :</p>
+      <div class="d-flex flex-column gap-2">
+        <button class="export-option" onclick="exportSVG()"><span style="font-size:28px;">🖼</span><div><strong>SVG</strong><br/><small class="text-muted">Image vectorielle</small></div></button>
+        <button class="export-option" onclick="exportJSON()"><span style="font-size:28px;">📄</span><div><strong>JSON</strong><br/><small class="text-muted">Données réimportables</small></div></button>
+        <button class="export-option" onclick="printTree()"><span style="font-size:28px;">🖨</span><div><strong>Imprimer</strong><br/><small class="text-muted">Mise en page</small></div></button>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <script src="script.js"></script>
+<!-- Toast -->
+<div id="toast"></div>
+<input type="file" id="file-input" accept=".json" style="display:none" onchange="handleImport(event)"/>
 
-  <!-- ===== GESTION PHOTO (compression + aperçu) ===== -->
-  <script>
-  /**
-   * Compresse une image côté client avant envoi
-   */
-  function compressImage(file, maxWidth=500, maxHeight=600, quality=0.82) {
-    return new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onerror=()=>reject(new Error('Lecture impossible'));
-      reader.onload=ev=>{
-        const img=new Image();
-        img.onerror=()=>reject(new Error('Image invalide'));
-        img.onload=()=>{
-          const canvas=document.createElement('canvas');
-          let w=img.width,h=img.height;
-          const ratio=Math.min(maxWidth/w,maxHeight/h);
-          if(ratio<1){w=Math.round(w*ratio);h=Math.round(h*ratio);}
-          canvas.width=w; canvas.height=h;
-          const ctx=canvas.getContext('2d');
-          ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
-          ctx.drawImage(img,0,0,w,h);
-          canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Blob vide')),'image/jpeg',quality);
-        };
-        img.src=ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  async function handlePhotoFile(e) {
-    const input=e.target, file=input.files[0];
-    if(!file) return;
-    const thumb=document.getElementById('photo-preview-thumb');
-    const loader=document.getElementById('upload-loader');
-    const infoBox=document.getElementById('compression-info');
-    const bar=document.getElementById('compression-bar');
-    const barText=document.getElementById('compression-text');
+<!-- ===== MAIN SCRIPT ===== -->
+<script src="script.js"></script>
 
-    // Réinitialiser
-    infoBox.style.display='none'; thumb.style.opacity='0.45'; loader.style.display='flex';
+    <!-- ===== PHOTO UPLOAD LOGIC ===== -->
+    <script>
+        /**
+         * Compresse une image côté client avant envoi
+         */
+        function compressImage(file, maxWidth = 500, maxHeight = 600, quality = 0.82) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error('Lecture impossible'));
+                reader.onload = ev => {
+                    const img = new Image();
+                    img.onerror = () => reject(new Error('Image invalide'));
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width,
+                            h = img.height;
+                        const ratio = Math.min(maxWidth / w, maxHeight / h);
+                        if (ratio < 1) { w = Math.round(w * ratio);
+                            h = Math.round(h * ratio); }
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Blob vide')), 'image/jpeg', quality);
+                    };
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
 
-    try {
-      // Validation format HEIC
-      if(/\.heic$|\.heif$/i.test(file.name)){
-        alert('Format HEIC non supporté. Sur iPhone : Réglages › Appareil photo › Formats → "Le plus compatible".');
-        input.value=''; return;
-      }
-      // Taille max 10 Mo côté client (le serveur limite à 5 Mo après compression)
-      if(file.size>10*1024*1024){ alert('Photo trop volumineuse (max 10 Mo).'); input.value=''; return; }
+        async function handlePhotoFile(e) {
+            const input = e.target,
+                file = input.files[0];
+            if (!file) return;
+            const thumb = document.getElementById('photo-preview-thumb');
+            const loader = document.getElementById('upload-loader');
+            const infoBox = document.getElementById('compression-info');
+            const bar = document.getElementById('compression-bar');
+            const barText = document.getElementById('compression-text');
 
-      // Qualité adaptative
-      let quality=0.82,maxW=480,maxH=600;
-      if(file.size>3*1024*1024){quality=0.70;}
-      else if(file.size>1*1024*1024){quality=0.76;}
-      if(navigator.connection?.effectiveType==='2g'||navigator.connection?.effectiveType==='slow-2g'){quality=0.60;maxW=360;maxH=480;}
+            infoBox.style.display = 'none';
+            thumb.style.opacity = '0.45';
+            loader.style.display = 'flex';
 
-      const blob=await compressImage(file,maxW,maxH,quality);
+            try {
+                if (/\.heic$|\.heif$/i.test(file.name)) {
+                    alert('Format HEIC non supporté. Sur iPhone : Réglages › Appareil photo › Formats → "Le plus compatible".');
+                    input.value = '';
+                    return;
+                }
+                if (file.size > 10 * 1024 * 1024) { alert('Photo trop volumineuse (max 10 Mo).');
+                    input.value = ''; return; }
 
-      // Fichier compressé
-      const ts=Date.now(), base=file.name.replace(/\.[^.]+$/,'');
-      const compressedFile=new File([blob],`${base}_${ts}.jpg`,{type:'image/jpeg',lastModified:ts});
+                let quality = 0.82,
+                    maxW = 480,
+                    maxH = 600;
+                if (file.size > 3 * 1024 * 1024) { quality = 0.70; } else if (file.size > 1 * 1024 * 1024) { quality = 0.76; }
+                if (navigator.connection?.effectiveType === '2g' || navigator.connection?.effectiveType === 'slow-2g') { quality =
+                        0.60;
+                    maxW = 360;
+                    maxH = 480; }
 
-      // Remplacer dans l'input pour que saveMember() puisse l'envoyer
-      const dt=new DataTransfer(); dt.items.add(compressedFile); input.files=dt.files;
+                const blob = await compressImage(file, maxW, maxH, quality);
+                const ts = Date.now(),
+                    base = file.name.replace(/\.[^.]+$/, '');
+                const compressedFile = new File([blob], `${base}_${ts}.jpg`, { type: 'image/jpeg', lastModified: ts });
 
-      // Aperçu immédiat
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        renderPhotoThumb(ev.target.result);
-        const pct=Math.round((1-blob.size/file.size)*100);
-        const origKB=(file.size/1024).toFixed(0), newKB=(blob.size/1024).toFixed(0);
-        infoBox.style.display='block';
-        bar.style.width=Math.max(4,100-pct)+'%';
-        bar.style.background=pct>=50?'var(--success)':pct>=20?'var(--accent)':'var(--text-light)';
-        barText.textContent=`${origKB} KB → ${newKB} KB  (−${pct}%)`;
-        if(window.showToast) showToast(`Photo prête : ${newKB} KB (−${pct}%)`);
-      };
-      reader.readAsDataURL(compressedFile);
+                const dt = new DataTransfer();
+                dt.items.add(compressedFile);
+                input.files = dt.files;
 
-    } catch(err) {
-      console.error('[Photo]',err);
-      alert('Erreur traitement photo. Réessayez.');
-      input.value='';
-    } finally {
-      loader.style.display='none'; thumb.style.opacity='1';
-    }
-  }
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    renderPhotoThumb(ev.target.result);
+                    const pct = Math.round((1 - blob.size / file.size) * 100);
+                    const origKB = (file.size / 1024).toFixed(0),
+                        newKB = (blob.size / 1024).toFixed(0);
+                    infoBox.style.display = 'block';
+                    bar.style.width = Math.max(4, 100 - pct) + '%';
+                    bar.style.background = pct >= 50 ? 'var(--success)' : pct >= 20 ? 'var(--accent)' : 'var(--text-light)';
+                    barText.textContent = `${origKB} KB → ${newKB} KB  (−${pct}%)`;
+                    if (window.showToast) showToast(`Photo prête : ${newKB} KB (−${pct}%)`);
+                };
+                reader.readAsDataURL(compressedFile);
 
-  function removePhoto() {
-    document.getElementById('f-photo').value='';
-    document.getElementById('f-photo-file').value='';
-    document.getElementById('photo-file-input').value='';
-    document.getElementById('compression-info').style.display='none';
-    document.getElementById('btn-photo-remove').style.display='none';
-    renderPhotoThumb(null);
-    if(window.showToast) showToast('Photo retirée');
-  }
+            } catch (err) {
+                console.error('[Photo]', err);
+                alert('Erreur traitement photo. Réessayez.');
+                input.value = '';
+            } finally {
+                loader.style.display = 'none';
+                thumb.style.opacity = '1';
+            }
+        }
 
-  /** Affiche la vignette ou le placeholder SVG */
-  function renderPhotoThumb(src) {
-    const thumb=document.getElementById('photo-preview-thumb');
-    const btnRem=document.getElementById('btn-photo-remove');
-    if(src&&src.length>4) {
-      thumb.innerHTML=`<img src="${src}" alt="aperçu" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.closest('.photo-preview-thumb').innerHTML=placeholderSVGThumb()"/>`;
-      btnRem.style.display='flex';
-    } else {
-      thumb.innerHTML=placeholderSVGThumb();
-      btnRem.style.display='none';
-    }
-  }
+        function removePhoto() {
+            document.getElementById('f-photo').value = '';
+            document.getElementById('f-photo-file').value = '';
+            document.getElementById('photo-file-input').value = '';
+            document.getElementById('compression-info').style.display = 'none';
+            document.getElementById('btn-photo-remove').style.display = 'none';
+            renderPhotoThumb(null);
+            if (window.showToast) showToast('Photo retirée');
+        }
 
-  function placeholderSVGThumb() {
-    const fn=(document.getElementById('f-firstname')?.value||'').trim();
-    const initiale=fn?fn.charAt(0).toUpperCase():'';
-    if(initiale) {
-      return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="32" cy="32" r="32" fill="var(--accent-bg)"/>
-        <text x="32" y="36" text-anchor="middle" dominant-baseline="middle"
-          fill="var(--accent)" font-family="'Cormorant Garamond',Georgia,serif"
-          font-size="28" font-weight="600">${initiale}</text>
-      </svg>`;
-    }
-    return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="32" fill="var(--bg-canvas)"/>
-      <circle cx="32" cy="26" r="10" fill="var(--text-light)" opacity=".4"/>
-      <ellipse cx="32" cy="54" rx="18" ry="12" fill="var(--text-light)" opacity=".25"/>
-    </svg>`;
-  }
+        function renderPhotoThumb(src) {
+            const thumb = document.getElementById('photo-preview-thumb');
+            const btnRem = document.getElementById('btn-photo-remove');
+            if (src && src.length > 4) {
+                thumb.innerHTML =
+                    `<img src="${src}" alt="aperçu" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.closest('.photo-preview-thumb').innerHTML=placeholderSVGThumb()"/>`;
+                btnRem.style.display = 'flex';
+            } else {
+                thumb.innerHTML = placeholderSVGThumb();
+                btnRem.style.display = 'none';
+            }
+        }
 
-  function syncPhotoUrl() {
-    const url=document.getElementById('f-photo').value.trim();
-    renderPhotoThumb(url||null);
-  }
+        function placeholderSVGThumb() {
+            const fn = (document.getElementById('f-firstname')?.value || '').trim();
+            const initiale = fn ? fn.charAt(0).toUpperCase() : '';
+            if (initiale) {
+                return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="32" cy="32" r="32" fill="var(--accent-bg)"/>
+                <text x="32" y="36" text-anchor="middle" dominant-baseline="middle"
+                  fill="var(--accent)" font-family="'Cormorant Garamond',Georgia,serif"
+                  font-size="28" font-weight="600">${initiale}</text>
+              </svg>`;
+            }
+            return `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="32" fill="var(--bg-canvas)"/>
+              <circle cx="32" cy="26" r="10" fill="var(--text-light)" opacity=".4"/>
+              <ellipse cx="32" cy="54" rx="18" ry="12" fill="var(--text-light)" opacity=".25"/>
+            </svg>`;
+        }
 
-  function updatePhotoPreview() {
-    const url=document.getElementById('f-photo').value.trim();
-    if(!url) renderPhotoThumb(null);
-  }
+        function syncPhotoUrl() {
+            const url = document.getElementById('f-photo').value.trim();
+            renderPhotoThumb(url || null);
+        }
 
-  // Reset de l'aperçu à l'ouverture du modal
-  document.addEventListener('DOMContentLoaded',()=>{
-    const modal=document.getElementById('member-modal');
-    new MutationObserver(()=>{
-      if(modal.classList.contains('open')){
-        document.getElementById('compression-info').style.display='none';
-        renderPhotoThumb(document.getElementById('f-photo').value.trim()||null);
-      }
-    }).observe(modal,{attributes:true,attributeFilter:['class']});
-  });
-  </script>
+        function updatePhotoPreview() {
+            const url = document.getElementById('f-photo').value.trim();
+            if (!url) renderPhotoThumb(null);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('member-modal');
+            new MutationObserver(() => {
+                if (modal.classList.contains('open')) {
+                    document.getElementById('compression-info').style.display = 'none';
+                    renderPhotoThumb(document.getElementById('f-photo').value.trim() || null);
+                }
+            }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+        });
+    </script>
+
 </body>
 </html>

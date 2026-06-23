@@ -278,12 +278,86 @@ function layoutTree() {
 
 /* ─── Pan & Zoom ──────────────────────────────────── */
 function initPan() {
-  const inner=document.getElementById('canvas-inner');
-  let dragging=false,startX,startY,startSL,startST;
-  inner.addEventListener('mousedown',e=>{ if(e.target.closest('.node-group'))return; dragging=true; startX=e.clientX;startY=e.clientY;startSL=inner.scrollLeft;startST=inner.scrollTop;inner.style.cursor='grabbing'; });
-  window.addEventListener('mousemove',e=>{ if(!dragging)return; inner.scrollLeft=startSL-(e.clientX-startX); inner.scrollTop=startST-(e.clientY-startY); });
-  window.addEventListener('mouseup',()=>{ dragging=false; inner.style.cursor='grab'; });
-  inner.addEventListener('wheel',e=>{ e.preventDefault(); scale=Math.max(0.3,Math.min(3,scale+(e.deltaY>0?-0.08:0.08))); applyTransform(); },{passive:false});
+  const inner = document.getElementById('canvas-inner');
+  let dragging = false, startX, startY, startSL, startST;
+  let lastTouchDist = 0;
+  let touchStartScale = 1;
+  let isTouching = false;
+  let touchStartX, touchStartY, touchStartSL, touchStartST;
+
+  // ─── Mouse drag (existing) ────────────────────────────
+  inner.addEventListener('mousedown', e => {
+    if (e.target.closest('.node-group')) return;
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startSL = inner.scrollLeft;
+    startST = inner.scrollTop;
+    inner.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    inner.scrollLeft = startSL - (e.clientX - startX);
+    inner.scrollTop = startST - (e.clientY - startY);
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    inner.style.cursor = 'grab';
+  });
+
+  // ─── Mouse wheel zoom (existing) ──────────────────────
+  inner.addEventListener('wheel', e => {
+    e.preventDefault();
+    scale = Math.max(0.3, Math.min(3, scale + (e.deltaY > 0 ? -0.08 : 0.08)));
+    applyTransform();
+  }, { passive: false });
+
+  // ─── TOUCH SUPPORT ────────────────────────────────────
+  inner.addEventListener('touchstart', e => {
+    const touches = e.touches;
+    if (touches.length === 1) {
+      // Single touch: start pan
+      isTouching = true;
+      const t = touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartSL = inner.scrollLeft;
+      touchStartST = inner.scrollTop;
+    } else if (touches.length === 2) {
+      // Two touches: start pinch
+      const t1 = touches[0], t2 = touches[1];
+      lastTouchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      touchStartScale = scale;
+      isTouching = true;
+    }
+  }, { passive: true });
+
+  inner.addEventListener('touchmove', e => {
+    e.preventDefault(); // prevent page scroll
+    const touches = e.touches;
+    if (touches.length === 1 && isTouching) {
+      // Pan with one finger
+      const t = touches[0];
+      inner.scrollLeft = touchStartSL - (t.clientX - touchStartX);
+      inner.scrollTop = touchStartST - (t.clientY - touchStartY);
+    } else if (touches.length === 2) {
+      // Pinch with two fingers
+      const t1 = touches[0], t2 = touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      if (lastTouchDist > 0) {
+        const delta = dist / lastTouchDist;
+        scale = Math.max(0.3, Math.min(3, touchStartScale * delta));
+        applyTransform();
+      }
+      lastTouchDist = dist;
+      touchStartScale = scale; // update to avoid jumps
+    }
+  }, { passive: false });
+
+  inner.addEventListener('touchend', e => {
+    isTouching = false;
+    lastTouchDist = 0;
+  }, { passive: true });
 }
 function applyTransform() { document.getElementById('tree-svg').style.transform=`scale(${scale})`; }
 function zoomIn()  { scale=Math.min(3,scale+0.12); applyTransform(); }
