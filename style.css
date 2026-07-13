@@ -104,7 +104,7 @@
 
 /* ─── Reset & Base Typography ─────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; overflow: hidden; margin: 0;}
+html, body { height: 100%; overflow: hidden; }
 
 body {
   font-family: var(--font-body);
@@ -364,9 +364,6 @@ input, select, textarea { font-family: inherit; }
   flex-direction: column;
   box-shadow: var(--shadow-lg);
   animation: modal-in .22s var(--ease);
-}
-.font-serif {
-  font-family: 'Playfair Display', Georgia, serif;
 }
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(18px) scale(.96); }
