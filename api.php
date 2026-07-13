@@ -142,8 +142,6 @@ switch ($action) {
             jsonError('Identifiants manquants', 400);
         }
 
-        $pdo->exec("ALTER TABLE membres ADD COLUMN photo_file TEXT;");
-
         $stmt = $pdo->prepare("SELECT * FROM utilisateurs WHERE username = ? COLLATE NOCASE LIMIT 1");
         $stmt->execute([$username]);
         $user = $stmt->fetch();
