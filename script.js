@@ -167,60 +167,94 @@ function renderTree() {
   const genMemo={};
   members.forEach(m=>getGen(m.id,genMemo));
 
-  members.forEach(m=>{
-    const pos=positions[m.id];
-    if(!pos) return;
-    if(m.parentId && positions[m.parentId]) {
-      const pp=positions[m.parentId];
-      const x1=pp.x+NW/2, y1=pp.y+NH, x2=pos.x+NW/2, y2=pos.y;
-      const my=(y1+y2)/2;
-      const col=genColor(genMemo[m.id]-1);
-      connectors+=`<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" fill="none" stroke="${col}" stroke-width="1.8" stroke-opacity=".5"/>`;
-    }
-    if(m.spouseId && positions[m.spouseId] && m.id<m.spouseId) {
-      const sp=positions[m.spouseId];
-      connectors+=`<line x1="${pos.x+NW}" y1="${pos.y+NH/2}" x2="${sp.x}" y2="${sp.y+NH/2}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
+  // ─── Calcul des centres de couple ──────────────────
+  const coupleCenters = {};
+  members.forEach(m => {
+    if (m.spouseId && positions[m.id] && positions[m.spouseId] && m.id < m.spouseId) {
+      const p1 = positions[m.id];
+      const p2 = positions[m.spouseId];
+      const cx = (p1.x + NW + p2.x) / 2;
+      const cy = p1.y + NH / 2;
+      coupleCenters[m.id] = { x: cx, y: cy };
+      coupleCenters[m.spouseId] = { x: cx, y: cy };
     }
   });
 
-  members.forEach(m=>{
-    const pos=positions[m.id];
+  // ─── Connecteurs ────────────────────────────────────
+  members.forEach(m => {
+    const pos = positions[m.id];
     if(!pos) return;
-    const g=genMemo[m.id];
-    const col=genColor(g), colL=genColor(g,true);
-    const ini=initials(m);
-    const photoClipId=`pc-${m.id}`;
-    const hasPhoto=m.photo && m.photo.length>5;
 
-    defs+=`<clipPath id="${photoClipId}"><circle cx="${pos.x+PHOTO_R+12}" cy="${pos.y+NH/2}" r="${PHOTO_R}"/></clipPath>`;
+    // Connexion parent → enfant
+    if(m.parentId && positions[m.parentId]) {
+      const parent = members.find(p => p.id === m.parentId);
+      const childPos = pos;
+      let startX, startY;
+      const hasSpouse = parent && parent.spouseId && positions[parent.spouseId];
+      if (hasSpouse && coupleCenters[parent.id]) {
+        const center = coupleCenters[parent.id];
+        startX = center.x;
+        startY = center.y;
+      } else {
+        const pp = positions[parent.id];
+        startX = pp.x + NW/2;
+        startY = pp.y + NH;
+      }
+      const endX = childPos.x + NW/2;
+      const endY = childPos.y;
+      const midY = (startY + endY) / 2;
+      const col = genColor(genMemo[m.id] - 1);
+      connectors += `<path d="M${startX},${startY} C${startX},${midY} ${endX},${midY} ${endX},${endY}" fill="none" stroke="${col}" stroke-width="1.8" stroke-opacity=".5"/>`;
+    }
 
-    nodes+=`<g class="node-group" data-id="${m.id}" onclick="openDetail('${m.id}')" oncontextmenu="openEditFromNode(event,'${m.id}')">`;
-    nodes+=`<rect class="node-rect" x="${pos.x}" y="${pos.y}" width="${NW}" height="${NH}" rx="${NRX}" fill="${colL}" stroke="${col}" stroke-width="1.8"/>`;
+    // Lien de couple + cœur
+    if(m.spouseId && positions[m.spouseId] && m.id < m.spouseId) {
+      const sp = positions[m.spouseId];
+      connectors += `<line x1="${pos.x+NW}" y1="${pos.y+NH/2}" x2="${sp.x}" y2="${sp.y+NH/2}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
+      const cx = (pos.x + NW + sp.x) / 2;
+      const cy = pos.y + NH/2;
+      connectors += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#c0392b" opacity="0.8">❤️</text>`;
+    }
+  });
 
-    const cx=pos.x+PHOTO_R+12, cy=pos.y+NH/2;
-    nodes+=`<circle cx="${cx}" cy="${cy}" r="${PHOTO_R}" fill="${col}" opacity=".15"/>`;
-    nodes+=`<circle cx="${cx}" cy="${cy}" r="${PHOTO_R}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
+  // ─── Nœuds (inchangé) ──────────────────────────────
+  members.forEach(m => {
+    const pos = positions[m.id];
+    if(!pos) return;
+    const g = genMemo[m.id];
+    const col = genColor(g), colL = genColor(g,true);
+    const ini = initials(m);
+    const photoClipId = `pc-${m.id}`;
+    const hasPhoto = m.photo && m.photo.length>5;
+
+    defs += `<clipPath id="${photoClipId}"><circle cx="${pos.x+PHOTO_R+12}" cy="${pos.y+NH/2}" r="${PHOTO_R}"/></clipPath>`;
+
+    nodes += `<g class="node-group" data-id="${m.id}" onclick="openDetail('${m.id}')" oncontextmenu="openEditFromNode(event,'${m.id}')">`;
+    nodes += `<rect class="node-rect" x="${pos.x}" y="${pos.y}" width="${NW}" height="${NH}" rx="${NRX}" fill="${colL}" stroke="${col}" stroke-width="1.8"/>`;
+
+    const cx = pos.x + PHOTO_R + 12, cy = pos.y + NH/2;
+    nodes += `<circle cx="${cx}" cy="${cy}" r="${PHOTO_R}" fill="${col}" opacity=".15"/>`;
+    nodes += `<circle cx="${cx}" cy="${cy}" r="${PHOTO_R}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
 
     if(hasPhoto) {
-      nodes+=`<image href="${m.photo}" x="${cx-PHOTO_R}" y="${cy-PHOTO_R}" width="${PHOTO_R*2}" height="${PHOTO_R*2}" clip-path="url(#${photoClipId})" preserveAspectRatio="xMidYMid slice"/>`;
+      nodes += `<image href="${m.photo}" x="${cx-PHOTO_R}" y="${cy-PHOTO_R}" width="${PHOTO_R*2}" height="${PHOTO_R*2}" clip-path="url(#${photoClipId})" preserveAspectRatio="xMidYMid slice"/>`;
     } else {
-      // Placeholder SVG avec initiales stylisées
-      nodes+=`${svgPlaceholder(cx, cy, PHOTO_R, col, ini, m.gender)}`;
+      nodes += svgPlaceholder(cx, cy, PHOTO_R, col, ini, m.gender);
     }
 
-    const textX=pos.x+PHOTO_R*2+20;
-    nodes+=`<text x="${textX}" y="${pos.y+NH/2-9}" fill="${col}" font-family="'Cormorant Garamond',Georgia,serif" font-size="13.5" font-weight="600" style="pointer-events:none"><tspan>${truncate(m.firstname,12)}</tspan></text>`;
-    nodes+=`<text x="${textX}" y="${pos.y+NH/2+7}"  fill="${col}" font-family="'Cormorant Garamond',Georgia,serif" font-size="12" font-weight="400"   style="pointer-events:none"><tspan>${truncate(m.lastname,14)}</tspan></text>`;
+    const textX = pos.x + PHOTO_R*2 + 20;
+    nodes += `<text x="${textX}" y="${pos.y+NH/2-9}" fill="${col}" font-family="'Cormorant Garamond',Georgia,serif" font-size="13.5" font-weight="600" style="pointer-events:none"><tspan>${truncate(m.firstname,12)}</tspan></text>`;
+    nodes += `<text x="${textX}" y="${pos.y+NH/2+7}"  fill="${col}" font-family="'Cormorant Garamond',Georgia,serif" font-size="12" font-weight="400"   style="pointer-events:none"><tspan>${truncate(m.lastname,14)}</tspan></text>`;
     if(m.birth) {
-      const yr=m.birth.slice(0,4)+(m.death?'–'+m.death.slice(0,4):'');
-      nodes+=`<text x="${textX}" y="${pos.y+NH/2+22}" fill="${col}" opacity=".65" font-family="'Inter',system-ui,sans-serif" font-size="10" style="pointer-events:none"><tspan>${yr}</tspan></text>`;
+      const yr = m.birth.slice(0,4)+(m.death?'–'+m.death.slice(0,4):'');
+      nodes += `<text x="${textX}" y="${pos.y+NH/2+22}" fill="${col}" opacity=".65" font-family="'Inter',system-ui,sans-serif" font-size="10" style="pointer-events:none"><tspan>${yr}</tspan></text>`;
     }
-    if(m.death) nodes+=`<text x="${pos.x+NW-10}" y="${pos.y+16}" fill="${col}" opacity=".5" font-size="11" text-anchor="middle" style="pointer-events:none">†</text>`;
-    nodes+=`</g>`;
+    if(m.death) nodes += `<text x="${pos.x+NW-10}" y="${pos.y+16}" fill="${col}" opacity=".5" font-size="11" text-anchor="middle" style="pointer-events:none">†</text>`;
+    nodes += `</g>`;
   });
 
-  defs+='</defs>';
-  svg.innerHTML = defs+connectors+nodes;
+  defs += '</defs>';
+  svg.innerHTML = defs + connectors + nodes;
   applyTransform();
 }
 

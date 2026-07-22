@@ -286,6 +286,13 @@ input, select, textarea { font-family: inherit; }
   transition: transform .28s var(--ease);
   transform-origin: 0 0;
 }
+#tree-svg text {
+  pointer-events: none;
+}
+/* Pour un cœur un peu plus gros */
+#tree-svg text[fill="#c0392b"] {
+  font-size: 16px;
+}
 
 /* Empty state */
 #empty-state {
