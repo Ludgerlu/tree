@@ -173,8 +173,14 @@ function renderTree() {
     if (m.spouseId && positions[m.id] && positions[m.spouseId] && m.id < m.spouseId) {
       const p1 = positions[m.id];
       const p2 = positions[m.spouseId];
-      const cx = (p1.x + NW + p2.x) / 2;
-      const cy = p1.y + NH / 2;
+      let cx, cy;
+      if (settings.orientation === 'top') {
+        cx = (p1.x + NW + p2.x) / 2;
+        cy = p1.y + NH / 2;
+      } else {
+        cx = p1.x + NW / 2;
+        cy = (p1.y + NH + p2.y) / 2;
+      }
       coupleCenters[m.id] = { x: cx, y: cy };
       coupleCenters[m.spouseId] = { x: cx, y: cy };
     }
@@ -186,33 +192,40 @@ function renderTree() {
     if(!pos) return;
 
     // Connexion parent → enfant
+    // parent → enfant
     if(m.parentId && positions[m.parentId]) {
       const parent = members.find(p => p.id === m.parentId);
-      const childPos = pos;
       let startX, startY;
       const hasSpouse = parent && parent.spouseId && positions[parent.spouseId];
       if (hasSpouse && coupleCenters[parent.id]) {
-        const center = coupleCenters[parent.id];
-        startX = center.x;
-        startY = center.y;
+        startX = coupleCenters[parent.id].x;
+        startY = coupleCenters[parent.id].y;
       } else {
         const pp = positions[parent.id];
-        startX = pp.x + NW/2;
-        startY = pp.y + NH;
+        startX = settings.orientation === 'top' ? pp.x + NW/2 : pp.x + NW;
+        startY = settings.orientation === 'top' ? pp.y + NH : pp.y + NH/2;
       }
-      const endX = childPos.x + NW/2;
-      const endY = childPos.y;
-      const midY = (startY + endY) / 2;
+      const endX = settings.orientation === 'top' ? pos.x + NW/2 : pos.x;
+      const endY = settings.orientation === 'top' ? pos.y : pos.y + NH/2;
+      const midY = (startY + endY) / 2, midX = (startX + endX) / 2;
       const col = genColor(genMemo[m.id] - 1);
-      connectors += `<path d="M${startX},${startY} C${startX},${midY} ${endX},${midY} ${endX},${endY}" fill="none" stroke="${col}" stroke-width="1.8" stroke-opacity=".5"/>`;
+      const path = settings.orientation === 'top'
+        ? `M${startX},${startY} C${startX},${midY} ${endX},${midY} ${endX},${endY}`
+        : `M${startX},${startY} C${midX},${startY} ${midX},${endY} ${endX},${endY}`;
+      connectors += `<path d="${path}" fill="none" stroke="${col}" stroke-width="1.8" stroke-opacity=".5"/>`;
     }
 
-    // Lien de couple + cœur
+    // lien de couple + cœur
     if(m.spouseId && positions[m.spouseId] && m.id < m.spouseId) {
       const sp = positions[m.spouseId];
-      connectors += `<line x1="${pos.x+NW}" y1="${pos.y+NH/2}" x2="${sp.x}" y2="${sp.y+NH/2}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
-      const cx = (pos.x + NW + sp.x) / 2;
-      const cy = pos.y + NH/2;
+      let cx, cy;
+      if (settings.orientation === 'top') {
+        connectors += `<line x1="${pos.x+NW}" y1="${pos.y+NH/2}" x2="${sp.x}" y2="${sp.y+NH/2}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
+        cx = (pos.x + NW + sp.x) / 2; cy = pos.y + NH/2;
+      } else {
+        connectors += `<line x1="${pos.x+NW/2}" y1="${pos.y+NH}" x2="${sp.x+NW/2}" y2="${sp.y}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
+        cx = pos.x + NW/2; cy = (pos.y + NH + sp.y) / 2;
+      }
       connectors += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#c0392b" opacity="0.8">❤️</text>`;
     }
   });
@@ -326,7 +339,7 @@ function layoutTree() {
       id: c.primary,
       members: c.members,
       isCouple: true,
-      width: 2 * NW + GAP_X,   // side‑by‑side
+      width: settings.orientation === 'top' ? (2 * NW + GAP_X) : (2 * NH + GAP_X),
       gen: genMemo[c.primary]
     };
     entities.push(entity);
@@ -474,11 +487,15 @@ function layoutTree() {
 // Helper to place members inside an entity
 function assignMemberPositions(entity, x, y, positions) {
   if (entity.isCouple) {
-    const [primary, secondary] = entity.members.sort(); // ensure order
-    positions[primary] = { x: x, y: y };
-    positions[secondary] = { x: x + NW + GAP_X, y: y };
+    const [primary, secondary] = entity.members.sort();
+    positions[primary] = { x, y };
+    if (settings.orientation === 'top') {
+      positions[secondary] = { x: x + NW + GAP_X, y };       // side by side
+    } else {
+      positions[secondary] = { x, y: y + NH + GAP_X };        // stacked
+    }
   } else {
-    positions[entity.members[0]] = { x: x, y: y };
+    positions[entity.members[0]] = { x, y };
   }
 }
 
