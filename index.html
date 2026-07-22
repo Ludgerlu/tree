@@ -1164,6 +1164,90 @@
             font-family: var(--font-display);
             font-weight: 600;
         }
+        /* ─── GALERIE PHOTOS DE FAMILLE ──────────────────────── */
+        .family-gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .family-photo-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--bg-card);
+            cursor: pointer;
+            transition: transform .15s, box-shadow .15s;
+            display: flex;
+            flex-direction: column;
+        }
+        .family-photo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,.1);
+        }
+        .family-photo-card-img {
+            width: 100%;
+            height: 150px;
+            background: var(--bg-canvas);
+            object-fit: cover;
+            display: block;
+        }
+        .family-photo-card-body {
+            padding: 10px 12px;
+        }
+        .family-photo-card-title {
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 15px;
+            margin: 0 0 2px;
+        }
+        .family-photo-card-meta {
+            font-size: 11.5px;
+            color: var(--text-light);
+            margin: 0;
+        }
+        .family-photo-view-img {
+            width: 100%;
+            max-height: 320px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            background: var(--bg-canvas);
+        }
+        .family-photo-view-img img {
+            width: 100%;
+            max-height: 320px;
+            object-fit: cover;
+            display: block;
+        }
+        .family-photo-view-members {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .family-photo-view-members span {
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: var(--bg-canvas);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        .family-photo-view-story {
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+        }
+        .family-preview-box {
+            font-size: 12.5px;
+            color: var(--text-light);
+            background: var(--bg-page);
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            min-height: 20px;
+        }
 
         .photo-upload-info {
             flex: 1;
@@ -1409,6 +1493,12 @@
                         <!-- Séparateur -->
                         <span class="header-sep d-none d-sm-inline-block"></span>
 
+                        <!-- Galerie photos de famille -->
+                        <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="openGalleryModal()" title="Photos de famille">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            <span class="d-none d-sm-inline">Galerie</span>
+                        </button>
+
                         <!-- Exporter & Paramètres -->
                         <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="openExport()" title="Exporter">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1639,6 +1729,89 @@
                     <button class="export-option" onclick="exportJSON()"><span style="font-size:28px;">📄</span><div><strong>JSON</strong><br/><small class="text-muted">Données réimportables</small></div></button>
                     <button class="export-option" onclick="printTree()"><span style="font-size:28px;">🖨</span><div><strong>Imprimer</strong><br/><small class="text-muted">Mise en page</small></div></button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Galerie des photos de famille -->
+    <div class="modal-overlay" id="gallery-modal">
+        <div class="modal-box" style="width:94%;max-width:900px;">
+            <div class="modal-header">
+                <h2 class="modal-title">📷 Photos de famille</h2>
+                <button class="btn-close" onclick="closeModal('gallery-modal')"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">Chaque photo réunit un parent, son (sa) conjoint(e) et ses enfants, avec une courte histoire.</p>
+                <div class="d-flex justify-content-end mb-2">
+                    <button id="btn-gallery-add" class="btn btn-success btn-sm" onclick="openFamilyPhotoForm()" style="display:none">+ Ajouter une photo de famille</button>
+                </div>
+                <div id="gallery-empty" class="text-center text-muted py-4" style="display:none">
+                    Aucune photo de famille pour l'instant.
+                </div>
+                <div id="gallery-grid" class="family-gallery-grid"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('gallery-modal')">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vue détaillée d'une photo de famille -->
+    <div class="modal-overlay" id="family-photo-view-modal">
+        <div class="modal-box" style="width:94%;max-width:560px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="fpv-title">Famille</h2>
+                <button class="btn-close" onclick="closeModal('family-photo-view-modal')"></button>
+            </div>
+            <div class="modal-body">
+                <div class="family-photo-view-img" id="fpv-img"></div>
+                <p class="small text-muted mb-1" id="fpv-annee"></p>
+                <div class="family-photo-view-members" id="fpv-members"></div>
+                <p class="family-photo-view-story" id="fpv-story"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger btn-sm" id="fpv-delete-btn" onclick="deleteFamilyPhoto()" style="display:none">Supprimer</button>
+                <div class="flex-grow-1"></div>
+                <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('family-photo-view-modal')">Fermer</button>
+                <button class="btn btn-primary btn-sm" id="fpv-edit-btn" onclick="editFamilyPhotoFromView()" style="display:none">✏ Modifier</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulaire d'ajout / édition d'une photo de famille -->
+    <div class="modal-overlay" id="family-photo-form-modal">
+        <div class="modal-box" style="width:94%;max-width:520px;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="fpf-heading">Nouvelle photo de famille</h2>
+                <button class="btn-close" onclick="closeModal('family-photo-form-modal')"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label small text-uppercase fw-semibold text-muted">Famille (parent ayant des enfants) <span class="text-danger">*</span></label>
+                    <select id="fpf-member" class="form-select form-select-sm" onchange="updateFamilyPreview()"></select>
+                </div>
+                <div class="family-preview-box mb-2" id="fpf-preview"></div>
+                <div class="text-center mb-2">
+                    <div class="photo-preview-thumb" id="fpf-photo-preview" style="width:120px;height:120px;margin:0 auto;">
+                        <span class="text-muted small">Aucune photo</span>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="document.getElementById('fpf-file-input').click()">📷 Choisir une photo</button>
+                    <input type="file" id="fpf-file-input" accept="image/*" style="display:none" onchange="handleFamilyPhotoFile(event)"/>
+                    <input type="hidden" id="fpf-photo-file"/>
+                    <input type="hidden" id="fpf-id"/>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small text-uppercase fw-semibold text-muted">Année / période</label>
+                    <input type="text" id="fpf-annee" class="form-control form-control-sm" placeholder="ex. 1998 ou Noël 2005"/>
+                </div>
+                <div>
+                    <label class="form-label small text-uppercase fw-semibold text-muted">Histoire courte</label>
+                    <textarea id="fpf-histoire" class="form-control form-control-sm" rows="3" placeholder="Racontez brièvement le contexte de cette photo…"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-sm" onclick="closeModal('family-photo-form-modal')">Annuler</button>
+                <button class="btn btn-success btn-sm" id="btn-save-family-photo" onclick="saveFamilyPhoto()">Enregistrer</button>
             </div>
         </div>
     </div>

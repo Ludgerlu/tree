@@ -17,6 +17,11 @@ let pendingEditId      = null;
 let pendingDeleteId    = null;
 let isSaving           = false;
 
+/* ─── Photos de famille ───────────────────────────── */
+let familyPhotos      = [];
+let fpEditingId        = null; // id de la photo de famille en cours d'édition (form)
+let fpViewId           = null; // id de la photo de famille affichée dans la vue détaillée
+
 /* ─── Thèmes ──────────────────────────────────────── */
 const THEMES = [
   { name:'Forêt',  gen0:'#2d5a3d',gen0l:'#e8f2ec',gen1:'#2d3d6b',gen1l:'#e8ecf7',gen2:'#7a3b2e',gen2l:'#f5ece9',gen3:'#2e5568',gen3l:'#e7f0f5',gen4:'#5a3068',gen4l:'#f2edf5',accent:'#2d5a3d',swatch:'#2d5a3d' },
@@ -82,7 +87,8 @@ async function apiUpload(formData) {
 async function loadData() {
   try {
     const data = await apiCall('load');
-    members  = data.members  || [];
+    members      = data.members      || [];
+    familyPhotos = data.familyPhotos || [];
     settings = { ...settings, ...(data.settings || {}) };
     settings.theme = parseInt(settings.theme) || 0;
     document.getElementById('tree-name-display').textContent = settings.treeName;
@@ -98,6 +104,7 @@ async function loadData() {
     }
   } catch(e) {
     members = [];
+    familyPhotos = [];
   }
 }
 
@@ -240,40 +247,205 @@ function truncate(str,max) {
 
 /* ─── Layout ──────────────────────────────────────── */
 function layoutTree() {
-  const positions={};
-  if(members.length===0) return positions;
-  const genMemo={};
-  members.forEach(m=>getGen(m.id,genMemo));
-  const childMap={};
-  members.forEach(m=>{ if(m.parentId){ childMap[m.parentId]=childMap[m.parentId]||[]; childMap[m.parentId].push(m); }});
-  const roots=members.filter(m=>!m.parentId).sort(compareMembers);
-  if(roots.length===0) {
-    const byGen={};
-    members.forEach(m=>{ const g=genMemo[m.id]; if(!byGen[g])byGen[g]=[]; byGen[g].push(m); });
-    Object.keys(byGen).map(Number).sort((a,b)=>a-b).forEach(g=>{
-      byGen[g].sort(compareMembers).forEach((m,i)=>{ positions[m.id]={x:40+i*(NW+GAP_X),y:40+g*(NH+GAP_Y)}; });
+  const positions = {};
+  if (members.length === 0) return positions;
+
+  // 1. Generation for each member (unchanged)
+  const genMemo = {};
+  members.forEach(m => getGen(m.id, genMemo));
+
+  // 2. Build spouse pairs (couples)
+  const coupleMap = {};       // memberId → entityId (primary)
+  const couples = [];         // { primary, secondary, members: [id1,id2] }
+  const processed = new Set();
+
+  members.forEach(m => {
+    if (m.spouseId && !processed.has(m.id) && !processed.has(m.spouseId)) {
+      const spouse = members.find(x => x.id === m.spouseId);
+      if (spouse) {
+        const ids = [m.id, spouse.id].sort();
+        const primary = ids[0];
+        const secondary = ids[1];
+        coupleMap[m.id] = primary;
+        coupleMap[spouse.id] = primary;
+        couples.push({ primary, secondary, members: ids });
+        processed.add(m.id);
+        processed.add(spouse.id);
+      }
+    }
+  });
+
+  // 3. Singles: their entity is themselves
+  members.forEach(m => {
+    if (!coupleMap[m.id]) {
+      coupleMap[m.id] = m.id;
+    }
+  });
+
+  // 4. Build entity objects
+  const entities = [];
+  const entityMap = {};
+
+  // Couples
+  couples.forEach(c => {
+    const entity = {
+      id: c.primary,
+      members: c.members,
+      isCouple: true,
+      width: 2 * NW + GAP_X,   // side‑by‑side
+      gen: genMemo[c.primary]
+    };
+    entities.push(entity);
+    entityMap[c.primary] = entity;
+  });
+
+  // Singles
+  members.forEach(m => {
+    if (coupleMap[m.id] === m.id && !entityMap[m.id]) {
+      const entity = {
+        id: m.id,
+        members: [m.id],
+        isCouple: false,
+        width: NW,
+        gen: genMemo[m.id]
+      };
+      entities.push(entity);
+      entityMap[m.id] = entity;
+    }
+  });
+
+  // 5. Build children map for entities (entityId → list of child member ids)
+  const childMap = {};
+  entities.forEach(e => childMap[e.id] = []);
+
+  members.forEach(m => {
+    if (m.parentId) {
+      const parentEntityId = coupleMap[m.parentId];
+      if (parentEntityId && childMap[parentEntityId]) {
+        childMap[parentEntityId].push(m.id);
+      }
+    }
+  });
+
+  // 6. Find root entities (those with no parent outside themselves)
+  const roots = entities.filter(e => {
+    for (const mid of e.members) {
+      const m = members.find(x => x.id === mid);
+      if (m && m.parentId) {
+        const parentEntityId = coupleMap[m.parentId];
+        if (parentEntityId && parentEntityId !== e.id) return false;
+      }
+    }
+    return true;
+  }).sort((a, b) => compareMembers(
+    members.find(x => x.id === a.id),
+    members.find(x => x.id === b.id)
+  ));
+
+  // Fallback if no roots (shouldn't happen with proper data)
+  if (roots.length === 0) {
+    const byGen = {};
+    entities.forEach(e => {
+      const g = e.gen || 0;
+      if (!byGen[g]) byGen[g] = [];
+      byGen[g].push(e);
+    });
+    Object.keys(byGen).map(Number).sort((a, b) => a - b).forEach(g => {
+      byGen[g].sort((a, b) => compareMembers(
+        members.find(x => x.id === a.id),
+        members.find(x => x.id === b.id)
+      )).forEach((e, i) => {
+        const x = 40 + i * (e.width + GAP_X);
+        const y = 40 + g * (NH + GAP_Y);
+        assignMemberPositions(e, x, y, positions);
+      });
     });
     return positions;
   }
-  const orientationTop=settings.orientation==='top';
-  const primarySize=orientationTop?NW:NH, secondaryStep=orientationTop?NH+GAP_Y:NW+GAP_Y;
-  const extents={}; let nextPrimary=40;
-  function computeExtent(node) {
-    const children=(childMap[node.id]||[]).sort(compareMembers);
-    if(!children.length) { const s=nextPrimary,e=s+primarySize; nextPrimary=e+GAP_X; extents[node.id]={start:s,end:e}; return extents[node.id]; }
-    const ce=children.map(computeExtent);
-    extents[node.id]={start:ce[0].start,end:ce[ce.length-1].end};
-    return extents[node.id];
+
+  // 7. Layout – using the same extent algorithm but with entity widths
+  const orientationTop = settings.orientation === 'top';
+  const secondaryStep = orientationTop ? NH + GAP_Y : NW + GAP_Y;
+  const extents = {};
+  let nextPrimary = 40;
+
+  function computeExtent(entity) {
+    const childIds = childMap[entity.id] || [];
+    // Deduplicate child entities (a couple may have multiple children)
+    const childEntities = [];
+    const seen = new Set();
+    childIds.forEach(mid => {
+      const eid = coupleMap[mid];
+      if (eid && !seen.has(eid)) {
+        seen.add(eid);
+        childEntities.push(entityMap[eid]);
+      }
+    });
+    childEntities.sort((a, b) => compareMembers(
+      members.find(x => x.id === a.id),
+      members.find(x => x.id === b.id)
+    ));
+
+    if (childEntities.length === 0) {
+      const s = nextPrimary;
+      const e = s + entity.width;
+      nextPrimary = e + GAP_X;
+      extents[entity.id] = { start: s, end: e };
+      return extents[entity.id];
+    }
+    const ce = childEntities.map(computeExtent);
+    const start = ce[0].start;
+    const end = ce[ce.length - 1].end;
+    extents[entity.id] = { start, end };
+    return extents[entity.id];
   }
-  function assignPositions(node) {
-    const g=genMemo[node.id]||0, e=extents[node.id];
-    const primary=e.start+(e.end-e.start-primarySize)/2;
-    positions[node.id]=orientationTop?{x:primary,y:40+g*secondaryStep}:{x:40+g*secondaryStep,y:primary};
-    (childMap[node.id]||[]).sort(compareMembers).forEach(assignPositions);
+
+  function assignPositions(entity) {
+    const e = extents[entity.id];
+    const totalWidth = entity.width;
+    const center = (e.start + e.end) / 2;
+    const primaryX = center - totalWidth / 2;
+    const y = 40 + (entity.gen || 0) * secondaryStep;
+
+    // For now we only handle 'top' orientation – you can mirror for 'left' later
+    const x = primaryX;
+    const yPos = y;
+
+    assignMemberPositions(entity, x, yPos, positions);
+
+    // Recurse children
+    const childIds = childMap[entity.id] || [];
+    const childEntities = [];
+    const seen = new Set();
+    childIds.forEach(mid => {
+      const eid = coupleMap[mid];
+      if (eid && !seen.has(eid)) {
+        seen.add(eid);
+        childEntities.push(entityMap[eid]);
+      }
+    });
+    childEntities.sort((a, b) => compareMembers(
+      members.find(x => x.id === a.id),
+      members.find(x => x.id === b.id)
+    ));
+    childEntities.forEach(assignPositions);
   }
+
   roots.forEach(computeExtent);
   roots.forEach(assignPositions);
+
   return positions;
+}
+
+// Helper to place members inside an entity
+function assignMemberPositions(entity, x, y, positions) {
+  if (entity.isCouple) {
+    const [primary, secondary] = entity.members.sort(); // ensure order
+    positions[primary] = { x: x, y: y };
+    positions[secondary] = { x: x + NW + GAP_X, y: y };
+  } else {
+    positions[entity.members[0]] = { x: x, y: y };
+  }
 }
 
 /* ─── Pan & Zoom ──────────────────────────────────── */
@@ -431,6 +603,8 @@ function updateAuthUI() {
   document.getElementById('btn-header-logout').style.display = auth ? 'inline-flex' : 'none';
   const detailEdit = document.getElementById('detail-edit-btn');
   if(detailEdit) detailEdit.style.display = auth ? 'inline-flex' : 'none';
+  const galleryAdd = document.getElementById('btn-gallery-add');
+  if(galleryAdd) galleryAdd.style.display = auth ? 'inline-flex' : 'none';
 
   // Statut utilisateur
   const statusEl = document.getElementById('user-status-bar');
@@ -701,6 +875,201 @@ function buildDetailFamily(m,genMemo) {
 function jumpDetail(id) { closeModal('detail-modal'); setTimeout(()=>openDetail(id),180); }
 function editFromDetail() { if(!detailOpenId) return; closeModal('detail-modal'); setTimeout(()=>openEditModal(detailOpenId),180); }
 function openEditFromNode(e,id) { e.preventDefault(); openEditModal(id); }
+
+/* ═══════════════════════════════════════════════════
+   PHOTOS DE FAMILLE (galerie)
+═══════════════════════════════════════════════════ */
+
+/** Retourne les membres qui ont au moins un enfant → familles possibles */
+function getFamilyHeads() {
+  return members
+    .filter(m => members.some(c => c.parentId === m.id))
+    .sort(compareMembers);
+}
+
+/** Construit la liste des membres d'une famille (chef + conjoint + enfants) */
+function getFamilyMembers(headId) {
+  const head = members.find(x => x.id === headId);
+  if (!head) return [];
+  const list = [head];
+  if (head.spouseId) {
+    const sp = members.find(x => x.id === head.spouseId);
+    if (sp) list.push(sp);
+  }
+  members.filter(c => c.parentId === headId).sort(compareMembers).forEach(c => list.push(c));
+  return list;
+}
+
+function familyLabel(headId) {
+  const head = members.find(x => x.id === headId);
+  if (!head) return 'Famille inconnue';
+  const sp = head.spouseId ? members.find(x => x.id === head.spouseId) : null;
+  return sp
+    ? `Famille de ${head.firstname} ${head.lastname} & ${sp.firstname} ${sp.lastname}`
+    : `Famille de ${head.firstname} ${head.lastname}`;
+}
+
+function openGalleryModal() {
+  renderGallery();
+  openModal('gallery-modal');
+}
+
+function renderGallery() {
+  const grid  = document.getElementById('gallery-grid');
+  const empty = document.getElementById('gallery-empty');
+  if (!familyPhotos.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = familyPhotos.map(fp => {
+    const label = familyLabel(fp.memberId);
+    const nbMembers = getFamilyMembers(fp.memberId).length;
+    const storyPreview = (fp.histoire || '').slice(0, 70) + ((fp.histoire||'').length > 70 ? '…' : '');
+    return `
+      <div class="family-photo-card" onclick="openFamilyPhotoView(${fp.id})">
+        <img class="family-photo-card-img" src="${fp.photo}" alt="${escapeHtml(label)}" onerror="this.style.display='none'"/>
+        <div class="family-photo-card-body">
+          <p class="family-photo-card-title">${escapeHtml(label)}</p>
+          <p class="family-photo-card-meta">${fp.annee ? escapeHtml(fp.annee)+' · ' : ''}${nbMembers} personne${nbMembers>1?'s':''}</p>
+          ${storyPreview ? `<p class="family-photo-card-meta" style="margin-top:4px;">${escapeHtml(storyPreview)}</p>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openFamilyPhotoView(id) {
+  const fp = familyPhotos.find(x => x.id === id);
+  if (!fp) return;
+  fpViewId = id;
+  document.getElementById('fpv-title').textContent = familyLabel(fp.memberId);
+  document.getElementById('fpv-annee').textContent  = fp.annee || '';
+  document.getElementById('fpv-img').innerHTML = `<img src="${fp.photo}" alt=""/>`;
+  document.getElementById('fpv-members').innerHTML = getFamilyMembers(fp.memberId)
+    .map(m => `<span>${escapeHtml(m.firstname)} ${escapeHtml(m.lastname)}</span>`).join('');
+  document.getElementById('fpv-story').textContent = fp.histoire || '';
+  document.getElementById('fpv-edit-btn').style.display   = isAuthenticated ? 'inline-flex' : 'none';
+  document.getElementById('fpv-delete-btn').style.display = isAuthenticated ? 'inline-flex' : 'none';
+  openModal('family-photo-view-modal');
+}
+
+function editFamilyPhotoFromView() {
+  if (!fpViewId) return;
+  if (!isAuthenticated) { openAuthModal(); return; }
+  const id = fpViewId;
+  closeModal('family-photo-view-modal');
+  setTimeout(() => openFamilyPhotoForm(id), 180);
+}
+
+async function deleteFamilyPhoto() {
+  if (!fpViewId) return;
+  if (!isAuthenticated) { openAuthModal(); return; }
+  if (!confirm('Supprimer cette photo de famille ?')) return;
+  try {
+    await apiCall('delete_family_photo', { id: fpViewId });
+    familyPhotos = familyPhotos.filter(x => x.id !== fpViewId);
+    closeModal('family-photo-view-modal');
+    renderGallery();
+    showToast('Photo de famille supprimée');
+  } catch(e) {}
+}
+
+/** Ouvre le formulaire. Sans paramètre → ajout. Avec un id → édition. */
+function openFamilyPhotoForm(id = null) {
+  if (!isAuthenticated) { openAuthModal(); return; }
+
+  const heads = getFamilyHeads();
+  if (!heads.length && id === null) {
+    showToast("Aucun membre n'a encore d'enfants enregistrés dans l'arbre.");
+    return;
+  }
+
+  fpEditingId = id;
+  const existing = id ? familyPhotos.find(x => x.id === id) : null;
+
+  document.getElementById('fpf-heading').textContent = existing ? 'Modifier la photo de famille' : 'Nouvelle photo de famille';
+  const select = document.getElementById('fpf-member');
+  select.innerHTML = heads.map(h => `<option value="${h.id}">${escapeHtml(familyLabel(h.id))}</option>`).join('');
+  select.disabled = !!existing; // on ne change pas de famille en édition, on modifie juste la photo/histoire
+  if (existing) select.value = existing.memberId;
+
+  document.getElementById('fpf-id').value        = existing ? existing.id : '';
+  document.getElementById('fpf-photo-file').value = existing ? existing.photoFile : '';
+  document.getElementById('fpf-annee').value      = existing ? (existing.annee || '') : '';
+  document.getElementById('fpf-histoire').value   = existing ? (existing.histoire || '') : '';
+  document.getElementById('fpf-file-input').value = '';
+
+  const preview = document.getElementById('fpf-photo-preview');
+  preview.innerHTML = existing
+    ? `<img src="${existing.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:8px"/>`
+    : `<span class="text-muted small">Aucune photo</span>`;
+
+  updateFamilyPreview();
+  openModal('family-photo-form-modal');
+}
+
+function updateFamilyPreview() {
+  const headId = document.getElementById('fpf-member').value;
+  const box = document.getElementById('fpf-preview');
+  if (!headId) { box.textContent = ''; return; }
+  const list = getFamilyMembers(headId);
+  box.textContent = 'Personnes sur cette photo : ' + list.map(m => `${m.firstname} ${m.lastname}`).join(', ');
+}
+
+async function handleFamilyPhotoFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const preview = document.getElementById('fpf-photo-preview');
+  preview.innerHTML = `<span class="text-muted small">Chargement…</span>`;
+  try {
+    const fd = new FormData();
+    fd.append('action', 'upload_family_photo');
+    fd.append('photo', file);
+    const oldFile = document.getElementById('fpf-photo-file').value;
+    if (oldFile) fd.append('replace_file', oldFile);
+    const up = await apiUpload(fd);
+    document.getElementById('fpf-photo-file').value = up.file;
+    preview.innerHTML = `<img src="${up.url}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:8px"/>`;
+  } catch(e) {
+    preview.innerHTML = `<span class="text-muted small">Aucune photo</span>`;
+  }
+}
+
+async function saveFamilyPhoto() {
+  if (!isAuthenticated) { openAuthModal(); return; }
+
+  const memberId  = document.getElementById('fpf-member').value;
+  const photoFile = document.getElementById('fpf-photo-file').value.trim();
+  const histoire  = document.getElementById('fpf-histoire').value.trim();
+  const annee     = document.getElementById('fpf-annee').value.trim();
+  const id        = document.getElementById('fpf-id').value || null;
+
+  if (!memberId) { showToast('Veuillez sélectionner une famille'); return; }
+  if (!photoFile) { showToast('Veuillez ajouter une photo'); return; }
+
+  const btn = document.getElementById('btn-save-family-photo');
+  btn.disabled = true;
+  const orig = btn.textContent; btn.textContent = 'Enregistrement…';
+
+  try {
+    let res;
+    if (id) {
+      res = await apiCall('update_family_photo', { id, photoFile, histoire, annee });
+      familyPhotos = familyPhotos.map(x => x.id === Number(id) ? res.photo : x);
+    } else {
+      res = await apiCall('add_family_photo', { memberId, photoFile, histoire, annee });
+      familyPhotos.push(res.photo);
+    }
+    closeModal('family-photo-form-modal');
+    renderGallery();
+    showToast(res.message || 'Photo de famille enregistrée');
+  } catch(e) {
+    console.error('saveFamilyPhoto:', e);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
 
 /* ─── Format date ─────────────────────────────────── */
 function formatDate(iso) {

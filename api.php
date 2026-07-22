@@ -91,6 +91,17 @@ $pdo->exec("
         cle         TEXT PRIMARY KEY,
         valeur      TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS photos_famille (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id   TEXT NOT NULL,             -- le parent \"chef de famille\" (doit avoir des enfants)
+        photo_file  TEXT NOT NULL,              -- nom de fichier sur le serveur
+        histoire    TEXT,                       -- courte histoire / légende
+        annee       TEXT,                       -- année ou période (libre, ex. '1998' ou 'Noël 2005')
+        created_at  TEXT DEFAULT (datetime('now')),
+        updated_at  TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (member_id) REFERENCES membres(id) ON DELETE CASCADE
+    );
 ");
 
 /* ─── Utilisateur admin par défaut (première exécution) ── */
@@ -229,6 +240,10 @@ switch ($action) {
         $params = [];
         foreach ($rows as $r) $params[$r['cle']] = $r['valeur'];
         $params['theme'] = (int)($params['theme'] ?? 0);
+        
+
+        $photosFamille = $pdo->query("SELECT * FROM photos_famille ORDER BY created_at ASC")->fetchAll();
+        $photosFamille = array_map('rowToFamilyPhoto', $photosFamille);
 
         // Retourner aussi l'état de session courant
         $authInfo = ['logged_in' => false];
@@ -241,7 +256,7 @@ switch ($action) {
             ];
         }
 
-        jsonOk(['members' => $membres, 'settings' => $params, 'auth' => $authInfo]);
+        jsonOk(['members' => $membres, 'settings' => $params, 'auth' => $authInfo, 'family_photos' => $photosFamille]);
         break;
 
     case 'add':
@@ -354,6 +369,15 @@ switch ($action) {
         $pdo->prepare("DELETE FROM membres WHERE id = ?")
             ->execute([$id]);
 
+        // Supprimer les photos de famille rattachées à ce membre (chef de famille)
+        $fpRows = $pdo->prepare("SELECT photo_file FROM photos_famille WHERE member_id = ?");
+        $fpRows->execute([$id]);
+        foreach ($fpRows->fetchAll() as $fp) deletePhotoFile($fp['photo_file']);
+        $pdo->prepare("DELETE FROM photos_famille WHERE member_id = ?")->execute([$id]);
+
+        $pdo->prepare("DELETE FROM membres WHERE id = ?")
+            ->execute([$id]);
+
         jsonOk(['message' => 'Membre supprimé', 'deleted_id' => $id]);
         break;
 
@@ -430,6 +454,132 @@ switch ($action) {
         deletePhotoFile($filename);
         jsonOk(['message' => 'Photo supprimée']);
         break;
+    
+    /* ══════════════════════════════════════════════
+       PHOTOS DE FAMILLE (groupe : parent + enfants)
+    ══════════════════════════════════════════════ */
+
+    case 'upload_family_photo':
+        requireAuth();
+
+        if (empty($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+            $errCode = $_FILES['photo']['error'] ?? -1;
+            jsonError('Erreur upload : ' . uploadErrorMessage($errCode), 400);
+        }
+
+        $file    = $_FILES['photo'];
+        $tmpPath = $file['tmp_name'];
+
+        if ($file['size'] > MAX_PHOTO_SIZE) {
+            jsonError('Photo trop volumineuse (max 5 Mo côté serveur)', 413);
+        }
+
+        $finfo    = new finfo(FILEINFO_MIME_TYPE);
+        $realMime = $finfo->file($tmpPath);
+        if (!in_array($realMime, ALLOWED_MIME, true)) {
+            jsonError('Format non autorisé. Utilisez JPG, PNG, GIF ou WebP.', 415);
+        }
+
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ALLOWED_EXT, true)) {
+            $mimeToExt = ['image/jpeg'=>'jpg','image/png'=>'png','image/gif'=>'gif','image/webp'=>'webp'];
+            $ext = $mimeToExt[$realMime] ?? 'jpg';
+        }
+
+        if (!@getimagesize($tmpPath)) {
+            jsonError('Le fichier n\'est pas une image valide', 415);
+        }
+
+        $newName  = bin2hex(random_bytes(16)) . '.' . $ext;
+        $destPath = UPLOADS_DIR . $newName;
+
+        if (!move_uploaded_file($tmpPath, $destPath)) {
+            jsonError('Impossible de déplacer le fichier uploadé', 500);
+        }
+        chmod($destPath, 0644);
+
+        $oldFile = $body['replace_file'] ?? null;
+        if ($oldFile) deletePhotoFile($oldFile);
+
+        jsonOk(['file' => $newName, 'url' => UPLOADS_URL . $newName, 'message' => 'Photo uploadée']);
+        break;
+
+    case 'add_family_photo':
+        requireAuth();
+        $memberId = $body['memberId']  ?? null;
+        $photoFile = $body['photoFile'] ?? null;
+        $histoire  = trim($body['histoire'] ?? '');
+        $annee     = trim($body['annee']    ?? '');
+
+        if (!$memberId)  jsonError('Le membre (chef de famille) est requis', 422);
+        if (!$photoFile) jsonError('La photo est requise', 422);
+
+        $chk = $pdo->prepare("SELECT id FROM membres WHERE id = ?");
+        $chk->execute([$memberId]);
+        if (!$chk->fetch()) jsonError('Membre introuvable', 404);
+
+        // Vérifier que ce membre a bien au moins un enfant
+        $hasChild = $pdo->prepare("SELECT COUNT(*) FROM membres WHERE parent_id = ?");
+        $hasChild->execute([$memberId]);
+        if ((int)$hasChild->fetchColumn() === 0) {
+            jsonError('Ce membre n\'a pas d\'enfants enregistrés : impossible d\'ajouter une photo de famille', 422);
+        }
+
+        $stmt = $pdo->prepare("
+            INSERT INTO photos_famille (member_id, photo_file, histoire, annee)
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([$memberId, $photoFile, $histoire ?: null, $annee ?: null]);
+        $newId = $pdo->lastInsertId();
+
+        $row = $pdo->prepare("SELECT * FROM photos_famille WHERE id = ?");
+        $row->execute([$newId]);
+        jsonOk(['photo' => rowToFamilyPhoto($row->fetch()), 'message' => 'Photo de famille ajoutée']);
+        break;
+
+    case 'update_family_photo':
+        requireAuth();
+        $id = $body['id'] ?? null;
+        if (!$id) jsonError('ID manquant', 400);
+
+        $row = $pdo->prepare("SELECT * FROM photos_famille WHERE id = ?");
+        $row->execute([$id]);
+        $existing = $row->fetch();
+        if (!$existing) jsonError('Photo de famille introuvable', 404);
+
+        $photoFile = $body['photoFile'] ?? $existing['photo_file'];
+        $histoire  = array_key_exists('histoire', $body) ? trim($body['histoire']) : $existing['histoire'];
+        $annee     = array_key_exists('annee', $body)    ? trim($body['annee'])    : $existing['annee'];
+
+        // Si le fichier a changé, supprimer l'ancien
+        if ($photoFile !== $existing['photo_file']) {
+            deletePhotoFile($existing['photo_file']);
+        }
+
+        $pdo->prepare("
+            UPDATE photos_famille SET photo_file = ?, histoire = ?, annee = ?, updated_at = datetime('now')
+            WHERE id = ?
+        ")->execute([$photoFile, $histoire ?: null, $annee ?: null, $id]);
+
+        $row->execute([$id]);
+        jsonOk(['photo' => rowToFamilyPhoto($row->fetch()), 'message' => 'Photo de famille modifiée']);
+        break;
+
+    case 'delete_family_photo':
+        requireAuth();
+        $id = $body['id'] ?? $_GET['id'] ?? null;
+        if (!$id) jsonError('ID manquant', 400);
+
+        $row = $pdo->prepare("SELECT photo_file FROM photos_famille WHERE id = ?");
+        $row->execute([$id]);
+        $existing = $row->fetch();
+        if ($existing) {
+            deletePhotoFile($existing['photo_file']);
+            $pdo->prepare("DELETE FROM photos_famille WHERE id = ?")->execute([$id]);
+        }
+        jsonOk(['message' => 'Photo de famille supprimée', 'deleted_id' => $id]);
+        break;
+
 
     /* ══════════════════════════════════════════════
        PARAMÈTRES
@@ -455,8 +605,11 @@ switch ($action) {
         // Supprimer toutes les photos
         $rows = $pdo->query("SELECT photo_file FROM membres WHERE photo_file IS NOT NULL")->fetchAll();
         foreach ($rows as $r) deletePhotoFile($r['photo_file']);
+        $fpRows = $pdo->query("SELECT photo_file FROM photos_famille")->fetchAll();
+        foreach ($fpRows as $r) deletePhotoFile($r['photo_file']);
 
         $pdo->exec("DELETE FROM membres");
+        $pdo->exec("DELETE FROM photos_famille");
         $pdo->exec("UPDATE parametres SET valeur = 'Ma Famille' WHERE cle = 'treeName'");
         jsonOk(['message' => 'Données effacées']);
         break;
@@ -544,6 +697,18 @@ function rowToMember(array $row): array {
         'notes'      => $row['notes']      ?? null,
         'photo'      => $photoUrl,
         'photoFile'  => $row['photo_file'] ?? null,
+    ];
+}
+
+function rowToFamilyPhoto(array $row): array {
+    return [
+        'id'        => (int)$row['id'],
+        'memberId'  => $row['member_id'],
+        'photoFile' => $row['photo_file'],
+        'photo'     => UPLOADS_URL . $row['photo_file'],
+        'histoire'  => $row['histoire']  ?? null,
+        'annee'     => $row['annee']     ?? null,
+        'createdAt' => $row['created_at'] ?? null,
     ];
 }
 
