@@ -442,8 +442,8 @@ function layoutTree() {
     const y = 40 + (entity.gen || 0) * secondaryStep;
 
     // For now we only handle 'top' orientation – you can mirror for 'left' later
-    const x = primaryX;
-    const yPos = y;
+    const x = orientationTop ? primaryX : y;
+    const yPos = orientationTop ? y : primaryX;
 
     assignMemberPositions(entity, x, yPos, positions);
 
@@ -735,6 +735,8 @@ function fillForm(m) {
   document.getElementById('f-notes').value      = m.notes      ||'';
   document.getElementById('f-photo').value      = m.photo      ||'';
   document.getElementById('f-photo-file').value = m.photoFile  ||'';
+  $('#f-parent').val(m.parentId || '').trigger('change');
+  $('#f-spouse').val(m.spouseId || '').trigger('change');
   const gv=m.gender||'M';
   document.querySelectorAll('input[name="gender"]').forEach(r=>r.checked=r.value===gv);
   if(typeof renderPhotoThumb==='function') renderPhotoThumb(m.photo||null);
@@ -743,15 +745,24 @@ function fillForm(m) {
 function resetForm() {
   ['f-firstname','f-lastname','f-birth','f-birthplace','f-death','f-deathplace','f-notes','f-photo','f-photo-file']
     .forEach(id=>{ document.getElementById(id).value=''; });
+  $('#f-parent').val('').trigger('change');
+  $('#f-spouse').val('').trigger('change');
   document.getElementById('g-m').checked=true;
   if(typeof renderPhotoThumb==='function') renderPhotoThumb(null);
 }
 
 function populateSelects(excludeId) {
-  const opts=members.filter(m=>m.id!==excludeId).sort(compareMembers)
-    .map(m=>`<option value="${m.id}">${escapeHtml(m.firstname)} ${escapeHtml(m.lastname)}</option>`).join('');
-  document.getElementById('f-parent').innerHTML=`<option value="">— Aucun (ancêtre racine) —</option>`+opts;
-  document.getElementById('f-spouse').innerHTML=`<option value="">— Aucun —</option>`+opts;
+  const parentSelect = document.getElementById('f-parent');
+  const spouseSelect = document.getElementById('f-spouse');
+  const membersList = members.filter(m => m.id !== excludeId).sort(compareMembers);
+
+  const options = membersList.map(m => `<option value="${m.id}">${escapeHtml(getMemberFullName(m))}</option>`).join('');
+  parentSelect.innerHTML = `<option value="">— Aucun (ancêtre racine) —</option>` + options;
+  spouseSelect.innerHTML = `<option value="">— Aucun —</option>` + options;
+
+  // Réinitialiser Select2
+  $(parentSelect).select2('destroy').select2({ placeholder: 'Rechercher un parent…', allowClear: true, theme: 'bootstrap-5', width: '100%' });
+  $(spouseSelect).select2('destroy').select2({ placeholder: 'Rechercher un conjoint(e)…', allowClear: true, theme: 'bootstrap-5', width: '100%' });
 }
 
 async function saveMember() {
@@ -764,8 +775,8 @@ async function saveMember() {
   if(!isAuthenticated) { showToast('Connexion requise'); openAuthModal(); return; }
 
   const gender   = document.querySelector('input[name="gender"]:checked')?.value||'M';
-  const parentId = document.getElementById('f-parent').value||null;
-  const spouseId = document.getElementById('f-spouse').value||null;
+  const parentId = $('#f-parent').val() || null;
+  const spouseId = $('#f-spouse').val() || null;
   isSaving=true; btn.disabled=true;
   const origText=btn.textContent; btn.textContent='Enregistrement…';
 
@@ -1059,9 +1070,14 @@ function openFamilyPhotoForm(id = null) {
   const existing = id ? familyPhotos.find(x => x.id === id) : null;
 
   document.getElementById('fpf-heading').textContent = existing ? 'Modifier la photo de famille' : 'Nouvelle photo de famille';
-  const select = document.getElementById('fpf-member');
-  select.innerHTML = heads.map(h => `<option value="${h.id}">${escapeHtml(familyLabel(h.id))}</option>`).join('');
-  select.disabled = !!existing; // on ne change pas de famille en édition, on modifie juste la photo/histoire
+  const select = $('#fpf-member');
+  let html = '<option value="">— Sélectionner —</option>';
+  heads.forEach(h => {
+      html += `<option value="${h.id}">${escapeHtml(getMemberFullName(h))}</option>`;
+  });
+  select.html(html);
+  select.val(existing ? existing.memberId : '').trigger('change');
+  select.prop('disabled', !!existing); // Désactiver en édition
   if (existing) select.value = existing.memberId;
 
   document.getElementById('fpf-id').value        = existing ? existing.id : '';
@@ -1080,11 +1096,11 @@ function openFamilyPhotoForm(id = null) {
 }
 
 function updateFamilyPreview() {
-  const headId = document.getElementById('fpf-member').value;
-  const box = document.getElementById('fpf-preview');
-  if (!headId) { box.textContent = ''; return; }
-  const list = getFamilyMembers(headId);
-  box.textContent = 'Personnes sur cette photo : ' + list.map(m => `${m.firstname} ${m.lastname}`).join(', ');
+    const headId = $('#fpf-member').val(); // maintenant c'est l'ID direct
+    const box = document.getElementById('fpf-preview');
+    if (!headId) { box.textContent = ''; return; }
+    const list = getFamilyMembers(headId);
+    box.textContent = 'Personnes sur cette photo : ' + list.map(m => getMemberFullName(m)).join(', ');
 }
 
 async function handleFamilyPhotoFile(event) {
@@ -1109,7 +1125,7 @@ async function handleFamilyPhotoFile(event) {
 async function saveFamilyPhoto() {
   if (!isAuthenticated) { openAuthModal(); return; }
 
-  const memberId  = document.getElementById('fpf-member').value;
+  const memberId = $('#fpf-member').val(); // c'est déjà l'ID
   const photoFile = document.getElementById('fpf-photo-file').value.trim();
   const histoire  = document.getElementById('fpf-histoire').value.trim();
   const annee     = document.getElementById('fpf-annee').value.trim();
@@ -1153,7 +1169,22 @@ function formatDate(iso) {
 
 /* ─── Modals ──────────────────────────────────────── */
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+        modal.classList.remove('open');
+        // Réinitialiser Select2 si présent dans la modale
+        $(modal).find('.select2').each(function() {
+            // Détruire puis recréer proprement
+            $(this).select2('destroy');
+            $(this).select2({
+                placeholder: 'Rechercher un membre…',
+                allowClear: true,
+                width: '100%'
+            });
+        });
+    }
+}
 
 document.querySelectorAll('.modal-overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
@@ -1243,4 +1274,8 @@ function showToast(msg) {
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+function getMemberFullName(m) {
+  return `${m.firstname || ''} ${m.lastname || ''}`.trim();
 }
