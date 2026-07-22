@@ -569,6 +569,16 @@ input, select, textarea { font-family: inherit; }
   color: var(--text-light); 
   margin-bottom: 9px;
 }
+.detail-family-photos {
+  margin-top: 16px;
+}
+.detail-family-photos img {
+  transition: transform .15s, box-shadow .15s;
+}
+.detail-family-photos img:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-sm);
+}
 .family-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .family-list li {
   display: flex; align-items: center; gap: 10px;

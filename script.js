@@ -876,6 +876,7 @@ function openDetail(id) {
 }
 
 function buildDetailFamily(m,genMemo) {
+  buildFamilyPhotosForPerson(m);
   const container=document.getElementById('detail-family');
   let html='';
   const addSection=(title,items)=>{
@@ -986,6 +987,41 @@ function openFamilyPhotoView(id) {
   document.getElementById('fpv-edit-btn').style.display   = isAuthenticated ? 'inline-flex' : 'none';
   document.getElementById('fpv-delete-btn').style.display = isAuthenticated ? 'inline-flex' : 'none';
   openModal('family-photo-view-modal');
+}
+
+function buildFamilyPhotosForPerson(m) {
+  const container = document.getElementById('detail-family-photos');
+  if (!container) return;
+
+  // Filtrer les photos de famille où cette personne est impliquée
+  const photos = familyPhotos.filter(fp => {
+    const head = members.find(x => x.id === fp.memberId);
+    if (!head) return false;
+    // Chef de famille
+    if (fp.memberId === m.id) return true;
+    // Conjoint(e) du chef
+    if (head.spouseId === m.id) return true;
+    // Enfant du chef
+    if (m.parentId === fp.memberId) return true;
+    return false;
+  });
+
+  if (photos.length === 0) {
+    container.innerHTML = ''; // on cache si vide
+    return;
+  }
+
+  container.innerHTML = `
+    <h3 style="font-size:var(--text-xs);font-weight:var(--font-bold);text-transform:uppercase;letter-spacing:var(--tracking-wider);color:var(--text-light);margin-bottom:9px;">📷 Photos de famille</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${photos.map(fp => `
+        <div style="cursor:pointer;border-radius:8px;overflow:hidden;width:80px;height:80px;border:1px solid var(--border);flex-shrink:0;" 
+             onclick="openFamilyPhotoView(${fp.id})" title="${escapeHtml(fp.histoire || 'Photo de famille')}">
+          <img src="${fp.photo}" style="width:100%;height:100%;object-fit:cover;" alt="Photo de famille" onerror="this.style.display='none'"/>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function editFamilyPhotoFromView() {
