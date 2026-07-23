@@ -353,7 +353,7 @@ function layoutTree() {
         id: m.id,
         members: [m.id],
         isCouple: false,
-        width: NW,
+        width: settings.orientation === 'top' ? NW : NH,
         gen: genMemo[m.id]
       };
       entities.push(entity);
