@@ -264,7 +264,7 @@ function renderTree() {
       const path = settings.orientation === 'top'
         ? `M${startX},${startY} C${startX},${midY} ${endX},${midY} ${endX},${endY}`
         : `M${startX},${startY} C${midX},${startY} ${midX},${endY} ${endX},${endY}`;
-      connectors += `<path d="${path}" fill="none" stroke="${col}" stroke-width="1.8" stroke-opacity=".5"/>`;
+      connectors += `<path d="${path}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-opacity=".55"/>`;
     }
 
     // lien de couple + cœur
@@ -272,64 +272,77 @@ function renderTree() {
       const sp = positions[m.spouseId];
       let cx, cy;
       if (settings.orientation === 'top') {
-        connectors += `<line x1="${pos.x+NW}" y1="${pos.y+NH/2}" x2="${sp.x}" y2="${sp.y+NH/2}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
+        connectors += `<line x1="${pos.x+NW}" y1="${pos.y+NH/2}" x2="${sp.x}" y2="${sp.y+NH/2}" stroke="#c9bfa8" stroke-width="1.6" stroke-dasharray="1.5,5" stroke-linecap="round" stroke-opacity=".85"/>`;
         cx = (pos.x + NW + sp.x) / 2; cy = pos.y + NH/2;
       } else {
-        connectors += `<line x1="${pos.x+NW/2}" y1="${pos.y+NH}" x2="${sp.x+NW/2}" y2="${sp.y}" stroke="#a89880" stroke-width="1.5" stroke-dasharray="5,4" stroke-opacity=".6"/>`;
+        connectors += `<line x1="${pos.x+NW/2}" y1="${pos.y+NH}" x2="${sp.x+NW/2}" y2="${sp.y}" stroke="#c9bfa8" stroke-width="1.6" stroke-dasharray="1.5,5" stroke-linecap="round" stroke-opacity=".85"/>`;
         cx = pos.x + NW/2; cy = (pos.y + NH + sp.y) / 2;
       }
-      connectors += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#c0392b" opacity="0.8">❤️</text>`;
+      connectors += svgHeart(cx, cy);
     }
   });
 
   // ─── Nœuds ──────────────────────────────────────────────
+  const GENDER_GLYPH = { F: '♀', M: '♂', N: '⊙' };
   members.forEach(m => {
     const pos = positions[m.id];
     if (!pos) return;
     const g = genMemo[m.id];
-    const col = genColor(g), colL = genColor(g, true);
+    const col = genColor(g);
     const ini = initials(m);
     const hasPhoto = m.photo && m.photo.length > 5;
 
-    // Coordonnées de la photo (centrée horizontalement)
-    const photoX = pos.x + (NW - PHOTO_SIZE) / 2;
-    const photoY = pos.y + 15;
+    const cardX = pos.x, cardY = pos.y;
+    const centerX = cardX + NW / 2;
+
+    // Avatar circulaire, chevauchant le bandeau supérieur
+    const R = 40;
+    const avCx = centerX;
+    const avCy = cardY + 22 + R;
 
     nodes += `<g class="node-group" data-id="${m.id}" onclick="openDetail('${m.id}')" oncontextmenu="openEditFromNode(event,'${m.id}')">`;
 
     // Fond de la carte
-    nodes += `<rect class="node-rect" x="${pos.x}" y="${pos.y}" width="${NW}" height="${NH}" rx="${NRX}" fill="${PARCHMENT}" stroke="${col}" stroke-width="1.5" filter="url(#shadow)"/>`;
+    nodes += `<rect class="node-rect" x="${cardX}" y="${cardY}" width="${NW}" height="${NH}" rx="${NRX}" fill="${PARCHMENT}" stroke="${col}" stroke-width="1.4" filter="url(#shadow)"/>`;
 
-    // Cadre de la photo (carré avec bordure)
-    nodes += `<rect x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" rx="6" fill="${col}" opacity=".12"/>`;
-    nodes += `<rect x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" rx="6" fill="none" stroke="${col}" stroke-width="2"/>`;
+    // Bandeau supérieur — accent de génération (coins arrondis)
+    nodes += `<path d="M${cardX},${cardY+NRX} A${NRX},${NRX} 0 0 1 ${cardX+NRX},${cardY} L${cardX+NW-NRX},${cardY} A${NRX},${NRX} 0 0 1 ${cardX+NW},${cardY+NRX} L${cardX+NW},${cardY+26} L${cardX},${cardY+26} Z" fill="${col}" opacity=".92"/>`;
+
+    // Anneau + fond de l'avatar
+    nodes += `<circle cx="${avCx}" cy="${avCy}" r="${R+4}" fill="${PARCHMENT}"/>`;
+    nodes += `<circle cx="${avCx}" cy="${avCy}" r="${R}" fill="${col}" opacity=".1"/>`;
 
     if (hasPhoto) {
-      // Clip pour l'image (carré)
       const clipId = `pc-${m.id}`;
-      defs += `<clipPath id="${clipId}"><rect x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" rx="6"/></clipPath>`;
-      nodes += `<image href="${m.photo}" x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>`;
+      defs += `<clipPath id="${clipId}"><circle cx="${avCx}" cy="${avCy}" r="${R}"/></clipPath>`;
+      nodes += `<image href="${m.photo}" x="${avCx-R}" y="${avCy-R}" width="${R*2}" height="${R*2}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>`;
     } else {
-      // Placeholder (initiales)
-      nodes += svgPlaceholderSquare(photoX, photoY, PHOTO_SIZE, col, ini, m.gender);
+      nodes += `<text x="${avCx}" y="${avCy+1}" text-anchor="middle" dominant-baseline="middle" fill="${col}" opacity=".85" font-family="'Playfair Display',Georgia,serif" font-size="30" font-weight="600" style="pointer-events:none">${(ini||'').toUpperCase()}</text>`;
     }
+    // Anneau coloré
+    nodes += `<circle cx="${avCx}" cy="${avCy}" r="${R}" fill="none" stroke="${col}" stroke-width="2.5"/>`;
 
-    // Texte : prénom
-    const textY = photoY + PHOTO_SIZE + 18;
-    nodes += `<text x="${pos.x + NW / 2}" y="${textY}" fill="${col}" font-family="'Playfair Display',Georgia,serif" font-size="16" font-weight="600" text-anchor="middle" style="pointer-events:none"><tspan>${truncate(m.firstname, 16)}</tspan></text>`;
+    // Pastille de genre
+    const gx = avCx + R * 0.72, gy = avCy + R * 0.72;
+    nodes += `<circle cx="${gx}" cy="${gy}" r="11" fill="${PARCHMENT}" stroke="${col}" stroke-width="1.5"/>`;
+    nodes += `<text x="${gx}" y="${gy+1}" text-anchor="middle" dominant-baseline="middle" fill="${col}" font-size="12" style="pointer-events:none">${GENDER_GLYPH[m.gender] || '⊙'}</text>`;
 
-    // Nom
-    nodes += `<text x="${pos.x + NW / 2}" y="${textY + 24}" fill="${col}" font-family="'Playfair Display',Georgia,serif" font-size="14" font-weight="400" text-anchor="middle" style="pointer-events:none"><tspan>${truncate(m.lastname, 16)}</tspan></text>`;
+    // Prénom
+    const nameY = avCy + R + 24;
+    nodes += `<text x="${centerX}" y="${nameY}" fill="${col}" font-family="'Playfair Display',Georgia,serif" font-size="16" font-weight="600" text-anchor="middle" style="pointer-events:none">${truncate(m.firstname, 15)}</text>`;
 
-    // Dates (si renseignées)
+    // Nom (majuscules discrètes)
+    nodes += `<text x="${centerX}" y="${nameY + 21}" fill="#5c5344" font-family="'DM Sans',system-ui,sans-serif" font-size="12" font-weight="500" letter-spacing="0.06em" text-anchor="middle" style="pointer-events:none">${truncate((m.lastname || '').toUpperCase(), 16)}</text>`;
+
+    // Dates
     if (m.birth) {
-      const yr = m.birth.slice(0, 4) + (m.death ? '–' + m.death.slice(0, 4) : '');
-      nodes += `<text x="${pos.x + NW / 2}" y="${textY + 48}" fill="${col}" opacity=".65" font-family="'DM Sans',system-ui,sans-serif" font-size="11" text-anchor="middle" style="pointer-events:none"><tspan>${yr}</tspan></text>`;
+      const yr = m.birth.slice(0, 4) + (m.death ? ' – ' + m.death.slice(0, 4) : '');
+      nodes += `<text x="${centerX}" y="${nameY + 42}" fill="#8a7d68" font-family="'DM Sans',system-ui,sans-serif" font-size="11" text-anchor="middle" style="pointer-events:none">${yr}</text>`;
     }
 
-    // Croix pour décès (en haut à droite)
+    // Croix pour décès (sur le bandeau, en haut à droite)
     if (m.death) {
-      nodes += `<text x="${pos.x + NW - 12}" y="${pos.y + 20}" fill="${col}" opacity=".5" font-size="14" text-anchor="middle" style="pointer-events:none">†</text>`;
+      nodes += `<text x="${cardX + NW - 15}" y="${cardY + 22}" fill="#ffffff" opacity=".9" font-size="14" text-anchor="middle" style="pointer-events:none">†</text>`;
     }
 
     nodes += `</g>`;
@@ -354,8 +367,8 @@ function renderTree() {
     const isCollapsed = collapsed.has(key);
     const col = genColor(genMemo[key] ?? 0);
 
-    connectors += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${col}" stroke-width="1.5" stroke-opacity=".45"/>`;
-    connectors += `<circle class="collapse-btn" cx="${bx}" cy="${by}" r="12" fill="#fff" stroke="${col}" stroke-width="1.5" style="cursor:pointer" onclick="toggleCollapse('${key}')"/>`;
+    connectors += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${col}" stroke-width="1.6" stroke-opacity=".4"/>`;
+    connectors += `<circle class="collapse-btn" cx="${bx}" cy="${by}" r="13" fill="#ffffff" stroke="${col}" stroke-width="1.6" filter="url(#shadow)" style="cursor:pointer" onclick="toggleCollapse('${key}')"/>`;
     const arrow = orientationTop
       ? (isCollapsed ? '▸' : '▾')
       : (isCollapsed ? '▾' : '▸');
@@ -394,6 +407,14 @@ function svgPlaceholderSquare(x, y, size, col, ini, gender) {
       <text x="${x + size - 10}" y="${y + size - 10}" text-anchor="middle"
         fill="${col}" opacity=".55" font-size="12">${genderSymbol}</text>
     </g>`;
+}
+
+/** Petit cœur dessiné (remplace l'emoji, rendu homogène) */
+function svgHeart(cx, cy) {
+  return `<g style="pointer-events:none" transform="translate(${cx},${cy})">
+    <circle r="12" fill="${PARCHMENT}" stroke="#e4d9bf" stroke-width="1"/>
+    <path transform="scale(1.05)" d="M0 3.4 C -5.6 -1.6 -8.4 -5.4 -5.2 -8 C -3 -9.7 -0.6 -8.2 0 -6 C 0.6 -8.2 3 -9.7 5.2 -8 C 8.4 -5.4 5.6 -1.6 0 3.4 Z" fill="#c0563f"/>
+  </g>`;
 }
 
 function truncate(str,max) {
@@ -696,9 +717,14 @@ function initPan() {
     lastTouchDist = 0;
   }, { passive: true });
 }
-function applyTransform() { document.getElementById('tree-svg').style.transform=`scale(${scale})`; }
+function applyTransform() {
+  document.getElementById('tree-svg').style.transform=`scale(${scale})`;
+  const lbl = document.getElementById('zoom-level');
+  if (lbl) lbl.textContent = Math.round(scale * 100) + '%';
+}
 function zoomIn()  { scale=Math.min(3,scale+0.12); applyTransform(); }
 function zoomOut() { scale=Math.max(0.3,scale-0.12); applyTransform(); }
+function resetZoom() { scale=1; applyTransform(); }
 function fitView() {
   const wrap=document.getElementById('canvas-wrap'), svg=document.getElementById('tree-svg');
   const sw=parseFloat(svg.getAttribute('width')||0), sh=parseFloat(svg.getAttribute('height')||0);

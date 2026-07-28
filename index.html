@@ -1426,6 +1426,198 @@
         :root {
             --success: #1D9E75;
         }
+
+        /* ════════════════════════════════════════════════════
+           RAFFINEMENTS UI (v2)
+           ════════════════════════════════════════════════════ */
+
+        /* Canvas — texture papier plus douce */
+        #canvas-wrap {
+            background-color: var(--bg-canvas);
+            background-image:
+                radial-gradient(circle at center, rgba(120, 100, 70, .10) 1px, transparent 1px);
+            background-size: 26px 26px;
+        }
+
+        /* Nœuds — survol plus vivant */
+        .node-group { cursor: pointer; }
+        .node-group .node-rect {
+            transition: filter .18s var(--ease);
+        }
+        .node-group:hover .node-rect {
+            filter: brightness(1.02) drop-shadow(0 6px 14px rgba(28, 22, 16, .18));
+        }
+        .collapse-btn { transition: transform .12s var(--ease), filter .12s; }
+        .collapse-btn:hover { filter: brightness(.97); }
+
+        /* ─── CONTRÔLES FLOTTANTS ZOOM ─────────────────────── */
+        #zoom-controls {
+            position: absolute;
+            right: 18px;
+            bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 5px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: var(--shadow-md);
+            z-index: 30;
+        }
+        .zoom-btn {
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 9px;
+            background: transparent;
+            color: var(--text-muted);
+            transition: background .15s, color .15s;
+        }
+        .zoom-btn:hover {
+            background: var(--accent-bg);
+            color: var(--accent-dark);
+        }
+        .zoom-btn:active { transform: scale(.94); }
+        .zoom-level-btn {
+            min-width: 52px;
+            height: 34px;
+            border: none;
+            background: transparent;
+            border-radius: 9px;
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 0.8rem;
+            font-weight: var(--font-semibold);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: .01em;
+            transition: background .15s;
+        }
+        .zoom-level-btn:hover { background: var(--bg-page); }
+        .zoom-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+            margin: 0 3px;
+        }
+
+        /* ─── EMPTY STATE raffiné ──────────────────────────── */
+        #empty-state {
+            display: none;
+            position: absolute;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            text-align: center;
+            pointer-events: none;
+            padding: 24px;
+        }
+        #empty-state.show { display: flex; pointer-events: all; }
+        .empty-icon {
+            font-size: 46px;
+            width: 92px;
+            height: 92px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--accent-bg);
+            border: 1px solid rgba(45, 90, 61, .2);
+            margin-bottom: 6px;
+        }
+        .empty-title {
+            font-family: var(--font-display);
+            font-size: var(--text-2xl);
+            font-weight: var(--font-semibold);
+            color: var(--text-primary);
+        }
+        .empty-sub {
+            font-size: var(--text-base);
+            color: var(--text-muted);
+            max-width: 320px;
+            line-height: var(--leading-relaxed);
+        }
+
+        /* ─── HEADER / boutons — micro-raffinements ────────── */
+        .logo-mark {
+            box-shadow: 0 2px 8px rgba(45, 90, 61, .28);
+        }
+        .nav-btn.btn:active { transform: scale(.97); }
+
+        /* Légende — pastilles un peu plus nettes */
+        .leg-swatch { box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+
+        /* ─── MODALS — en-tête / pied plus élégants ────────── */
+        .modal-box {
+            box-shadow: 0 24px 60px rgba(28, 22, 16, .22), 0 6px 16px rgba(28, 22, 16, .10);
+        }
+        .modal-header {
+            padding: 18px 22px 14px;
+        }
+        .modal-footer {
+            background: var(--bg-page);
+            padding: 14px 22px;
+        }
+        /* Champs de formulaire (Bootstrap) — cohérence patrimoine */
+        .modal-body .form-control,
+        .modal-body .form-select {
+            border-radius: 9px;
+            border-color: var(--border);
+            background: var(--bg-page);
+        }
+        .modal-body .form-control:focus,
+        .modal-body .form-select:focus {
+            border-color: var(--accent-mid);
+            box-shadow: 0 0 0 3px rgba(45, 90, 61, .14);
+        }
+        .modal-body .form-label {
+            margin-bottom: 4px;
+        }
+        .modal-body .form-check-input:checked {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+        /* Boutons Bootstrap success/primary → accent patrimoine */
+        .btn-success {
+            --bs-btn-bg: var(--accent);
+            --bs-btn-border-color: var(--accent);
+            --bs-btn-hover-bg: var(--accent-dark);
+            --bs-btn-hover-border-color: var(--accent-dark);
+            --bs-btn-active-bg: var(--accent-dark);
+            --bs-btn-active-border-color: var(--accent-dark);
+            --bs-btn-disabled-bg: var(--accent);
+            --bs-btn-disabled-border-color: var(--accent);
+        }
+        .btn-primary {
+            --bs-btn-bg: var(--accent);
+            --bs-btn-border-color: var(--accent);
+            --bs-btn-hover-bg: var(--accent-dark);
+            --bs-btn-hover-border-color: var(--accent-dark);
+        }
+
+        /* ─── TOAST — icône + accent ───────────────────────── */
+        #toast {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            border-left: 3px solid var(--accent-mid);
+        }
+
+        /* ─── RESPONSIVE contrôles flottants ───────────────── */
+        @media (max-width: 640px) {
+            #zoom-controls {
+                right: 12px;
+                bottom: 12px;
+                padding: 4px;
+            }
+            .zoom-btn { width: 30px; height: 30px; }
+            .zoom-level-btn { min-width: 44px; height: 30px; font-size: 0.72rem; }
+        }
     </style>
 </head>
 <body>
@@ -1461,23 +1653,6 @@
                             <span class="text-muted fst-italic" style="font-size:inherit;">Non connecté</span>
                         </div>
 
-                        <span class="header-sep d-none d-sm-inline-block"></span>
-
-                        <!-- Groupe de boutons : Centrer, Zoom +, Zoom - -->
-                        <div class="d-flex gap-1">
-                            <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="fitView()" title="Tout afficher">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
-                                <span class="d-none d-sm-inline">Centrer</span>
-                            </button>
-                            <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="zoomIn()" title="Zoom +">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-                            </button>
-                            <button class="nav-btn btn btn-outline-secondary btn-sm" onclick="zoomOut()" title="Zoom -">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="14" y2="11"/></svg>
-                            </button>
-                        </div>
-
-                        <!-- Séparateur -->
                         <span class="header-sep d-none d-sm-inline-block"></span>
 
                         <!-- Ajouter (visible uniquement connecté) -->
@@ -1541,8 +1716,23 @@
         <div id="empty-state">
             <div class="empty-icon">🌱</div>
             <h3 class="empty-title">Votre arbre est vide</h3>
-            <p class="empty-sub">Commencez par ajouter l'ancêtre fondateur.</p>
+            <p class="empty-sub">Commencez par ajouter l'ancêtre fondateur pour faire pousser votre histoire familiale.</p>
             <button id="btn-empty-add" class="btn btn-success mt-2" onclick="openAddModal(null)" style="display:none">+ Ajouter le premier membre</button>
+        </div>
+
+        <!-- Contrôles flottants zoom / recadrage -->
+        <div id="zoom-controls" aria-label="Contrôles de zoom">
+            <button type="button" class="zoom-btn" onclick="zoomIn()" title="Zoom avant" aria-label="Zoom avant">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button type="button" class="zoom-level-btn" onclick="resetZoom()" title="Réinitialiser le zoom" aria-label="Réinitialiser le zoom"><span id="zoom-level">100%</span></button>
+            <button type="button" class="zoom-btn" onclick="zoomOut()" title="Zoom arrière" aria-label="Zoom arrière">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <span class="zoom-divider"></span>
+            <button type="button" class="zoom-btn" onclick="fitView()" title="Tout afficher" aria-label="Tout afficher">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>
+            </button>
         </div>
     </div>
 
