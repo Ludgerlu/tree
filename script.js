@@ -7,6 +7,7 @@
 /* ─── État global ─────────────────────────────────── */
 let members   = [];
 let settings  = { treeName: 'Ma Famille', theme: 0, orientation: 'top' };
+let collapsed = new Set(); // ids des entités (parent/couple) dont les descendants sont repliés
 let scale     = 1;
 let editingId    = null;
 let detailOpenId = null;
@@ -32,7 +33,13 @@ const THEMES = [
 ];
 
 /* ─── Dimensions nœuds ────────────────────────────── */
-const NW=158, NH=80, NRX=12, GAP_X=36, GAP_Y=100, PHOTO_R=22;
+const NW = 180;          // largeur de la carte (plus grande)
+const NH = 220;          // hauteur (plus grande)
+const NRX = 12;          // coins arrondis
+const GAP_X = 50;        // espace horizontal entre cartes
+const GAP_Y = 130;       // espace vertical entre générations
+const PHOTO_SIZE = 80;   // taille de la photo (carrée)
+const PARCHMENT = '#f8f0da';
 
 /* ─── Init ────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -91,6 +98,7 @@ async function loadData() {
     familyPhotos = data.familyPhotos || [];
     settings = { ...settings, ...(data.settings || {}) };
     settings.theme = parseInt(settings.theme) || 0;
+    collapsed = new Set(settings.collapsed || []);
     document.getElementById('tree-name-display').textContent = settings.treeName;
 
     // Restaurer la session si elle est toujours active côté serveur
@@ -121,6 +129,50 @@ function getGen(id, memo={}) {
   if (!m || !m.parentId) { memo[id]=0; return 0; }
   memo[id] = getGen(m.parentId, memo) + 1;
   return memo[id];
+}
+
+/** Clé d'entité pour un membre : id du couple (le plus petit des deux ids triés) ou son propre id s'il est seul.
+ *  C'est la même clé utilisée comme identifiant d'entité dans layoutTree(). */
+function entityKeyOf(id) {
+  const m = members.find(x => x.id === id);
+  if (m && m.spouseId && members.find(x => x.id === m.spouseId)) {
+    return [m.id, m.spouseId].sort()[0];
+  }
+  return id;
+}
+
+/** Map { entityKey: true } pour toute entité ayant au moins un enfant (indépendant de l'état replié/déplié). */
+function computeHasChildrenMap() {
+  const map = {};
+  members.forEach(m => {
+    if (m.parentId) map[entityKeyOf(m.parentId)] = true;
+  });
+  return map;
+}
+
+/** Ensemble des ids de membres masqués car un de leurs ancêtres est replié. */
+function computeHiddenIds() {
+  const hidden = new Set();
+  function ancestorCollapsed(m) {
+    let cur = m;
+    const seen = new Set();
+    while (cur && cur.parentId && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      if (collapsed.has(entityKeyOf(cur.parentId))) return true;
+      cur = members.find(x => x.id === cur.parentId);
+    }
+    return false;
+  }
+  members.forEach(m => { if (ancestorCollapsed(m)) hidden.add(m.id); });
+  return hidden;
+}
+
+/** Replie ou déplie la branche descendant de l'entité identifiée par `key`. */
+function toggleCollapse(key) {
+  if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+  settings.collapsed = Array.from(collapsed);
+  saveData();
+  renderTree();
 }
 
 function genColor(g, light=false) {
@@ -163,7 +215,7 @@ function renderTree() {
   svg.setAttribute('width',W); svg.setAttribute('height',H);
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
 
-  let defs='<defs>'; let connectors=''; let nodes='';
+  let defs='<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1c1610" flood-opacity="0.18"/></filter>'; let connectors=''; let nodes='';
   const genMemo={};
   members.forEach(m=>getGen(m.id,genMemo));
 
@@ -193,7 +245,7 @@ function renderTree() {
 
     // Connexion parent → enfant
     // parent → enfant
-    if(m.parentId && positions[m.parentId]) {
+    if (m.parentId && positions[m.parentId]) {
       const parent = members.find(p => p.id === m.parentId);
       let startX, startY;
       const hasSpouse = parent && parent.spouseId && positions[parent.spouseId];
@@ -202,11 +254,11 @@ function renderTree() {
         startY = coupleCenters[parent.id].y;
       } else {
         const pp = positions[parent.id];
-        startX = settings.orientation === 'top' ? pp.x + NW/2 : pp.x + NW;
-        startY = settings.orientation === 'top' ? pp.y + NH : pp.y + NH/2;
+        startX = settings.orientation === 'top' ? pp.x + NW / 2 : pp.x + NW;
+        startY = settings.orientation === 'top' ? pp.y + NH : pp.y + NH / 2;
       }
-      const endX = settings.orientation === 'top' ? pos.x + NW/2 : pos.x;
-      const endY = settings.orientation === 'top' ? pos.y : pos.y + NH/2;
+      const endX = settings.orientation === 'top' ? pos.x + NW / 2 : pos.x;
+      const endY = settings.orientation === 'top' ? pos.y : pos.y + NH / 2;
       const midY = (startY + endY) / 2, midX = (startX + endX) / 2;
       const col = genColor(genMemo[m.id] - 1);
       const path = settings.orientation === 'top'
@@ -230,40 +282,84 @@ function renderTree() {
     }
   });
 
-  // ─── Nœuds (inchangé) ──────────────────────────────
+  // ─── Nœuds ──────────────────────────────────────────────
   members.forEach(m => {
     const pos = positions[m.id];
-    if(!pos) return;
+    if (!pos) return;
     const g = genMemo[m.id];
-    const col = genColor(g), colL = genColor(g,true);
+    const col = genColor(g), colL = genColor(g, true);
     const ini = initials(m);
-    const photoClipId = `pc-${m.id}`;
-    const hasPhoto = m.photo && m.photo.length>5;
+    const hasPhoto = m.photo && m.photo.length > 5;
 
-    defs += `<clipPath id="${photoClipId}"><circle cx="${pos.x+PHOTO_R+12}" cy="${pos.y+NH/2}" r="${PHOTO_R}"/></clipPath>`;
+    // Coordonnées de la photo (centrée horizontalement)
+    const photoX = pos.x + (NW - PHOTO_SIZE) / 2;
+    const photoY = pos.y + 15;
 
     nodes += `<g class="node-group" data-id="${m.id}" onclick="openDetail('${m.id}')" oncontextmenu="openEditFromNode(event,'${m.id}')">`;
-    nodes += `<rect class="node-rect" x="${pos.x}" y="${pos.y}" width="${NW}" height="${NH}" rx="${NRX}" fill="${colL}" stroke="${col}" stroke-width="1.8"/>`;
 
-    const cx = pos.x + PHOTO_R + 12, cy = pos.y + NH/2;
-    nodes += `<circle cx="${cx}" cy="${cy}" r="${PHOTO_R}" fill="${col}" opacity=".15"/>`;
-    nodes += `<circle cx="${cx}" cy="${cy}" r="${PHOTO_R}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
+    // Fond de la carte
+    nodes += `<rect class="node-rect" x="${pos.x}" y="${pos.y}" width="${NW}" height="${NH}" rx="${NRX}" fill="${PARCHMENT}" stroke="${col}" stroke-width="1.5" filter="url(#shadow)"/>`;
 
-    if(hasPhoto) {
-      nodes += `<image href="${m.photo}" x="${cx-PHOTO_R}" y="${cy-PHOTO_R}" width="${PHOTO_R*2}" height="${PHOTO_R*2}" clip-path="url(#${photoClipId})" preserveAspectRatio="xMidYMid slice"/>`;
+    // Cadre de la photo (carré avec bordure)
+    nodes += `<rect x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" rx="6" fill="${col}" opacity=".12"/>`;
+    nodes += `<rect x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" rx="6" fill="none" stroke="${col}" stroke-width="2"/>`;
+
+    if (hasPhoto) {
+      // Clip pour l'image (carré)
+      const clipId = `pc-${m.id}`;
+      defs += `<clipPath id="${clipId}"><rect x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" rx="6"/></clipPath>`;
+      nodes += `<image href="${m.photo}" x="${photoX}" y="${photoY}" width="${PHOTO_SIZE}" height="${PHOTO_SIZE}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>`;
     } else {
-      nodes += svgPlaceholder(cx, cy, PHOTO_R, col, ini, m.gender);
+      // Placeholder (initiales)
+      nodes += svgPlaceholderSquare(photoX, photoY, PHOTO_SIZE, col, ini, m.gender);
     }
 
-    const textX = pos.x + PHOTO_R*2 + 20;
-    nodes += `<text x="${textX}" y="${pos.y+NH/2-9}" fill="${col}" font-family="'Cormorant Garamond',Georgia,serif" font-size="13.5" font-weight="600" style="pointer-events:none"><tspan>${truncate(m.firstname,12)}</tspan></text>`;
-    nodes += `<text x="${textX}" y="${pos.y+NH/2+7}"  fill="${col}" font-family="'Cormorant Garamond',Georgia,serif" font-size="12" font-weight="400"   style="pointer-events:none"><tspan>${truncate(m.lastname,14)}</tspan></text>`;
-    if(m.birth) {
-      const yr = m.birth.slice(0,4)+(m.death?'–'+m.death.slice(0,4):'');
-      nodes += `<text x="${textX}" y="${pos.y+NH/2+22}" fill="${col}" opacity=".65" font-family="'Inter',system-ui,sans-serif" font-size="10" style="pointer-events:none"><tspan>${yr}</tspan></text>`;
+    // Texte : prénom
+    const textY = photoY + PHOTO_SIZE + 18;
+    nodes += `<text x="${pos.x + NW / 2}" y="${textY}" fill="${col}" font-family="'Playfair Display',Georgia,serif" font-size="16" font-weight="600" text-anchor="middle" style="pointer-events:none"><tspan>${truncate(m.firstname, 16)}</tspan></text>`;
+
+    // Nom
+    nodes += `<text x="${pos.x + NW / 2}" y="${textY + 24}" fill="${col}" font-family="'Playfair Display',Georgia,serif" font-size="14" font-weight="400" text-anchor="middle" style="pointer-events:none"><tspan>${truncate(m.lastname, 16)}</tspan></text>`;
+
+    // Dates (si renseignées)
+    if (m.birth) {
+      const yr = m.birth.slice(0, 4) + (m.death ? '–' + m.death.slice(0, 4) : '');
+      nodes += `<text x="${pos.x + NW / 2}" y="${textY + 48}" fill="${col}" opacity=".65" font-family="'DM Sans',system-ui,sans-serif" font-size="11" text-anchor="middle" style="pointer-events:none"><tspan>${yr}</tspan></text>`;
     }
-    if(m.death) nodes += `<text x="${pos.x+NW-10}" y="${pos.y+16}" fill="${col}" opacity=".5" font-size="11" text-anchor="middle" style="pointer-events:none">†</text>`;
+
+    // Croix pour décès (en haut à droite)
+    if (m.death) {
+      nodes += `<text x="${pos.x + NW - 12}" y="${pos.y + 20}" fill="${col}" opacity=".5" font-size="14" text-anchor="middle" style="pointer-events:none">†</text>`;
+    }
+
     nodes += `</g>`;
+  });
+
+  // ─── Boutons collapse/expand (entre parent et enfants) ──
+  const hasChildrenMap = computeHasChildrenMap();
+  const orientationTop = settings.orientation === 'top';
+  Object.keys(hasChildrenMap).forEach(key => {
+    const pos = positions[key];
+    if (!pos) return; // le parent doit être visible (toujours le cas : on ne masque que les descendants)
+    let ax, ay;
+    if (orientationTop) {
+      ax = coupleCenters[key] ? coupleCenters[key].x : pos.x + NW / 2;
+      ay = pos.y + NH; // bord inférieur de la ligne du parent
+    } else {
+      ax = pos.x + NW; // bord droit
+      ay = coupleCenters[key] ? coupleCenters[key].y : pos.y + NH / 2;
+    }
+    const bx = orientationTop ? ax : ax + GAP_Y / 2;
+    const by = orientationTop ? ay + GAP_Y / 2 : ay;
+    const isCollapsed = collapsed.has(key);
+    const col = genColor(genMemo[key] ?? 0);
+
+    connectors += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${col}" stroke-width="1.5" stroke-opacity=".45"/>`;
+    connectors += `<circle class="collapse-btn" cx="${bx}" cy="${by}" r="12" fill="#fff" stroke="${col}" stroke-width="1.5" style="cursor:pointer" onclick="toggleCollapse('${key}')"/>`;
+    const arrow = orientationTop
+      ? (isCollapsed ? '▸' : '▾')
+      : (isCollapsed ? '▾' : '▸');
+    connectors += `<text x="${bx}" y="${by + 4}" text-anchor="middle" font-size="12" fill="${col}" style="pointer-events:none">${arrow}</text>`;
   });
 
   defs += '</defs>';
@@ -273,17 +369,30 @@ function renderTree() {
 
 /** Placeholder SVG élégant avec initiales + icône genre */
 function svgPlaceholder(cx, cy, r, col, ini, gender) {
-  const genderSymbol = gender==='F' ? '♀' : gender==='M' ? '♂' : '⊙';
-  const genderY = cy + r - 7;
+  const genderSymbol = gender === 'F' ? '♀' : gender === 'M' ? '♂' : '⊙';
   return `
     <g style="pointer-events:none">
-      <circle cx="${cx}" cy="${cy}" r="${r-1}" fill="${col}" opacity=".08"/>
-      <text x="${cx}" y="${cy+2}" text-anchor="middle" dominant-baseline="middle"
+      <circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="${col}" opacity=".08"/>
+      <text x="${cx}" y="${cy + 2}" text-anchor="middle" dominant-baseline="middle"
         fill="${col}" opacity=".85"
-        font-family="'Cormorant Garamond',Georgia,serif"
-        font-size="${r*0.9}" font-weight="600">${ini.toUpperCase()}</text>
-      <text x="${cx+r-5}" y="${genderY}" text-anchor="middle"
-        fill="${col}" opacity=".55" font-size="9">${genderSymbol}</text>
+        font-family="'Playfair Display',Georgia,serif"
+        font-size="${r * 0.8}" font-weight="600">${ini.toUpperCase()}</text>
+      <text x="${cx + r - 6}" y="${cy + r - 8}" text-anchor="middle"
+        fill="${col}" opacity=".55" font-size="12">${genderSymbol}</text>
+    </g>`;
+}
+
+function svgPlaceholderSquare(x, y, size, col, ini, gender) {
+  const genderSymbol = gender === 'F' ? '♀' : gender === 'M' ? '♂' : '⊙';
+  return `
+    <g style="pointer-events:none">
+      <rect x="${x}" y="${y}" width="${size}" height="${size}" rx="6" fill="${col}" opacity=".08"/>
+      <text x="${x + size/2}" y="${y + size/2 + 4}" text-anchor="middle" dominant-baseline="middle"
+        fill="${col}" opacity=".85"
+        font-family="'Playfair Display',Georgia,serif"
+        font-size="${size * 0.45}" font-weight="600">${ini.toUpperCase()}</text>
+      <text x="${x + size - 10}" y="${y + size - 10}" text-anchor="middle"
+        fill="${col}" opacity=".55" font-size="12">${genderSymbol}</text>
     </g>`;
 }
 
@@ -297,6 +406,11 @@ function layoutTree() {
   const positions = {};
   if (members.length === 0) return positions;
 
+  // 0. Exclure les descendants d'une entité repliée (collapse)
+  const hidden = computeHiddenIds();
+  const treeMembers = members.filter(m => !hidden.has(m.id));
+  if (treeMembers.length === 0) return positions;
+
   // 1. Generation for each member (unchanged)
   const genMemo = {};
   members.forEach(m => getGen(m.id, genMemo));
@@ -306,9 +420,9 @@ function layoutTree() {
   const couples = [];         // { primary, secondary, members: [id1,id2] }
   const processed = new Set();
 
-  members.forEach(m => {
+  treeMembers.forEach(m => {
     if (m.spouseId && !processed.has(m.id) && !processed.has(m.spouseId)) {
-      const spouse = members.find(x => x.id === m.spouseId);
+      const spouse = treeMembers.find(x => x.id === m.spouseId);
       if (spouse) {
         const ids = [m.id, spouse.id].sort();
         const primary = ids[0];
@@ -323,7 +437,7 @@ function layoutTree() {
   });
 
   // 3. Singles: their entity is themselves
-  members.forEach(m => {
+  treeMembers.forEach(m => {
     if (!coupleMap[m.id]) {
       coupleMap[m.id] = m.id;
     }
@@ -347,7 +461,7 @@ function layoutTree() {
   });
 
   // Singles
-  members.forEach(m => {
+  treeMembers.forEach(m => {
     if (coupleMap[m.id] === m.id && !entityMap[m.id]) {
       const entity = {
         id: m.id,
@@ -365,7 +479,7 @@ function layoutTree() {
   const childMap = {};
   entities.forEach(e => childMap[e.id] = []);
 
-  members.forEach(m => {
+  treeMembers.forEach(m => {
     if (m.parentId) {
       const parentEntityId = coupleMap[m.parentId];
       if (parentEntityId && childMap[parentEntityId]) {
@@ -490,9 +604,9 @@ function assignMemberPositions(entity, x, y, positions) {
     const [primary, secondary] = entity.members.sort();
     positions[primary] = { x, y };
     if (settings.orientation === 'top') {
-      positions[secondary] = { x: x + NW + GAP_X, y };       // side by side
+      positions[secondary] = { x: x + NW + GAP_X, y };
     } else {
-      positions[secondary] = { x, y: y + NH + GAP_X };        // stacked
+      positions[secondary] = { x, y: y + NH + GAP_X };
     }
   } else {
     positions[entity.members[0]] = { x, y };
@@ -887,7 +1001,7 @@ function openDetail(id) {
       <svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%">
         <circle cx="40" cy="40" r="40" fill="${col}" opacity=".12"/>
         <text x="40" y="43" text-anchor="middle" dominant-baseline="middle"
-          fill="${col}" font-family="'Cormorant Garamond',Georgia,serif"
+          fill="${col}" font-family="'Playfair Display',Georgia,serif"
           font-size="28" font-weight="600" opacity=".85">${initials(m).toUpperCase()}</text>
         <text x="62" y="66" text-anchor="middle" fill="${col}" opacity=".5" font-size="16">${genderSymbol}</text>
       </svg>`;
@@ -915,7 +1029,7 @@ function buildDetailFamily(m,genMemo) {
       const colL=genColor(Math.min(genMemo[person.id]??0,4),true);
       const avatarContent=person.photo&&person.photo.length>5
         ?`<img src="${person.photo}" alt="${escapeHtml(person.firstname)}"/>`
-        :`<span style="font-family:'Cormorant Garamond',serif;font-size:12px;font-weight:600;color:${col};">${initials(person).toUpperCase()}</span>`;
+        :`<span style="font-family:'Playfair Display',serif;font-size:12px;font-weight:600;color:${col};">${initials(person).toUpperCase()}</span>`;
       html+=`<li onclick="jumpDetail('${person.id}')">
         <div class="family-mini-avatar" style="border-color:${col};background:${colL};">${avatarContent}</div>
         <span>${escapeHtml(person.firstname)} ${escapeHtml(person.lastname)}</span>
