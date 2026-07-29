@@ -1,0 +1,459 @@
+/* ===================================================
+   ARBRE GÉNÉALOGIQUE — NOUVEAU DESIGN RESPONSIVE & DYNAMIQUE
+   ================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap');
+
+:root {
+    /* Typographie */
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Outfit', system-ui, sans-serif;
+
+    /* Couleurs de base - Thème Clair par défaut (Ivoire premium) */
+    --bg-page: #FDFBF7;
+    --bg-canvas: #F5F2EB;
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --bg-card-hover: rgba(255, 255, 255, 1);
+    
+    --text-primary: #2C2825;
+    --text-secondary: #5C564D;
+    --text-tertiary: #8C8477;
+    
+    --border: rgba(44, 40, 37, 0.08);
+    --border-strong: rgba(44, 40, 37, 0.15);
+    
+    /* Générations (Palette premium douce) */
+    --gen0: #2D4A3E; /* Vert sapin */
+    --gen1: #324469; /* Bleu nuit */
+    --gen2: #7A3E31; /* Acajou */
+    --gen3: #4A6B7C; /* Bleu ardoise */
+    --gen4: #6B4255; /* Prune */
+    
+    --gen0-light: #E6EEEA;
+    --gen1-light: #E8EDF5;
+    --gen2-light: #F5EAE8;
+    --gen3-light: #EBF2F5;
+    --gen4-light: #F2EBF0;
+
+    --accent: var(--gen0);
+    --accent-light: var(--gen0-light);
+    
+    /* Dimensions et Ombres */
+    --card-w: 220px;
+    --card-h: 90px;
+    --card-w-mobile: 160px;
+    --card-h-mobile: 75px;
+    --card-radius: 16px;
+    
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.04);
+    --shadow-hover: 0 12px 32px rgba(0, 0, 0, 0.08);
+    --shadow-modal: 0 20px 40px rgba(0, 0, 0, 0.12);
+    
+    /* Transitions */
+    --transition-slow: 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    --transition-med: 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    --transition-fast: 0.15s ease-out;
+}
+
+/* Reset & Base */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: var(--font-body);
+    color: var(--text-primary);
+    background: var(--bg-page);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ─── HEADER ─── */
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: rgba(253, 251, 247, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.logo-icon {
+    font-size: 24px;
+    background: var(--accent);
+    color: white;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px;
+}
+.brand-text h1 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    line-height: 1.1;
+}
+.brand-text p {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+/* ─── NAVIGATION (Fil d'ariane) ─── */
+.breadcrumb-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 24px;
+    background: transparent;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    z-index: 90;
+    position: absolute;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    pointer-events: none; /* Let clicks pass through to canvas */
+}
+.breadcrumb-item {
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--border);
+    transition: var(--transition-med);
+    pointer-events: auto;
+}
+.breadcrumb-item:hover {
+    background: var(--bg-card);
+    transform: translateY(-1px);
+}
+.breadcrumb-sep { color: var(--text-tertiary); }
+
+/* ─── CONTROLS (Actions) ─── */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    border: 1px solid transparent;
+    background: transparent;
+    font-family: inherit;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-outline { border-color: var(--border-strong); color: var(--text-primary); }
+.btn-outline:hover { background: rgba(0,0,0,0.03); }
+.btn-icon { padding: 8px; border-radius: 50%; }
+
+/* ─── TREE CANVAS (FOCUS MODE) ─── */
+#tree-canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-canvas);
+    background-image: radial-gradient(circle, var(--border-strong) 1px, transparent 1px);
+    background-size: 40px 40px;
+    touch-action: none; /* For custom pan/zoom if needed */
+}
+
+/* SVG Lines Layer */
+#lines-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* HTML Nodes Layer */
+#nodes-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    transform-origin: 0 0;
+    transition: transform 0.1s ease-out; /* For smooth panning */
+}
+
+/* ─── MEMBER CARDS (HTML) ─── */
+.member-card {
+    position: absolute;
+    width: var(--card-w);
+    height: var(--card-h);
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    
+    /* Animation base */
+    transition: all var(--transition-slow);
+    transform: translate(-50%, -50%); /* Centered on its x,y coordinates */
+    opacity: 0;
+    scale: 0.8;
+    pointer-events: none;
+}
+.member-card.visible {
+    opacity: 1;
+    scale: 1;
+    pointer-events: auto;
+}
+.member-card:hover {
+    box-shadow: var(--shadow-hover);
+    background: var(--bg-card-hover);
+    transform: translate(-50%, -52%);
+}
+.member-card.is-center {
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-light), var(--shadow-hover);
+    z-index: 10;
+}
+.member-card.is-deceased {
+    opacity: 0.85;
+}
+
+/* Card Content */
+.card-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--bg-canvas);
+    border: 2px solid var(--border);
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: var(--text-tertiary);
+    position: relative;
+}
+.card-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.card-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.card-dates {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}
+.card-badges {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: flex;
+    gap: 4px;
+}
+.badge {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* ─── BOTTOM SHEETS / MODALS ─── */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(28, 24, 20, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-med);
+    display: flex;
+    align-items: flex-end; /* Align bottom for sheets */
+    justify-content: center;
+}
+.overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bottom-sheet {
+    background: var(--bg-page);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    border-radius: 24px 24px 0 0;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform var(--transition-slow);
+    box-shadow: var(--shadow-modal);
+}
+@media (min-width: 641px) {
+    .overlay { align-items: center; }
+    .bottom-sheet {
+        border-radius: 20px;
+        transform: translateY(20px) scale(0.95);
+        opacity: 0;
+    }
+    .overlay.active .bottom-sheet {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+.overlay.active .bottom-sheet {
+    transform: translateY(0);
+}
+
+.sheet-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.sheet-title {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+.btn-close {
+    background: var(--bg-canvas);
+    border: none;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+.btn-close:hover { background: var(--border-strong); }
+
+.sheet-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+.sheet-footer {
+    padding: 16px 24px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+/* Form Elements */
+.form-group { margin-bottom: 16px; }
+.form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.form-control, .form-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    background: white;
+    font-family: inherit;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    transition: border-color var(--transition-fast);
+}
+.form-control:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* ─── TOAST ─── */
+#toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text-primary);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    box-shadow: var(--shadow-modal);
+    z-index: 9999;
+    opacity: 0;
+    transition: all var(--transition-slow);
+}
+#toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+/* ─── RESPONSIVE ADJUSTMENTS ─── */
+@media (max-width: 768px) {
+    :root {
+        --card-w: var(--card-w-mobile);
+        --card-h: var(--card-h-mobile);
+    }
+    header { padding: 12px; }
+    .brand-text h1 { font-size: 1.1rem; }
+    .btn span { display: none; }
+    .btn { padding: 8px; }
+    .card-info { justify-content: flex-start; margin-top: 4px; }
+    .card-avatar { width: 36px; height: 36px; font-size: 1rem; }
+    .card-name { font-size: 0.9rem; }
+    .card-dates { font-size: 0.65rem; }
+}
+
+/* Utils */
+.d-flex { display: flex; }
+.flex-column { flex-direction: column; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.w-100 { width: 100%; }
+.text-danger { color: var(--danger); }

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arbre Généalogique</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome pour les icônes légères -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="brand">
+            <div class="logo-icon"><i class="fa-solid fa-tree"></i></div>
+            <div class="brand-text">
+                <h1 id="tree-name-display">Famille</h1>
+                <p id="user-status-display">Non connecté</p>
+            </div>
+        </div>
+        
+        <div class="header-actions">
+            <!-- Toujours visible -->
+            <button class="btn btn-outline btn-icon" onclick="UI.openSearch()" title="Rechercher">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+            <button class="btn btn-outline btn-icon" onclick="UI.openSettings()" title="Paramètres">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+            
+            <!-- Contextuel Auth -->
+            <button id="btn-login" class="btn btn-primary" onclick="UI.openAuth()">
+                <i class="fa-solid fa-user"></i> <span>Connexion</span>
+            </button>
+            <button id="btn-logout" class="btn btn-outline" onclick="API.logout()" style="display:none;">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> <span>Déconnexion</span>
+            </button>
+            <button id="btn-add-member" class="btn btn-primary" onclick="UI.openMemberModal()" style="display:none;">
+                <i class="fa-solid fa-plus"></i> <span>Ajouter</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- BREADCRUMB (Fil d'ariane) -->
+    <div class="breadcrumb-container" id="breadcrumb">
+        <!-- Rempli dynamiquement par JS -->
+    </div>
+
+    <!-- CANVAS (FOCUS MODE) -->
+    <main id="tree-canvas">
+        <svg id="lines-layer"></svg>
+        <div id="nodes-layer">
+            <!-- Les cartes HTML seront injectées ici -->
+        </div>
+    </main>
+
+    <!-- ==================== BOTTOM SHEETS (MODALS) ==================== -->
+
+    <!-- MEMBER DETAILS / EDIT -->
+    <div class="overlay" id="sheet-member">
+        <div class="bottom-sheet">
+            <div class="sheet-header">
+                <h2 class="sheet-title" id="sheet-member-title">Détails</h2>
+                <button class="btn-close" onclick="UI.closeSheet('sheet-member')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sheet-body">
+                <!-- Vue Détail -->
+                <div id="view-member-detail">
+                    <div class="d-flex gap-3 mb-4 align-items-center">
+                        <div class="card-avatar" id="detail-avatar" style="width:72px;height:72px;font-size:1.8rem;"></div>
+                        <div>
+                            <h3 id="detail-name" style="font-family:var(--font-display);font-size:1.5rem;line-height:1.2;">-</h3>
+                            <p id="detail-dates" style="color:var(--text-secondary);font-size:0.9rem;"></p>
+                        </div>
+                    </div>
+                    <p id="detail-notes" style="background:var(--bg-canvas);padding:12px;border-radius:12px;font-style:italic;color:var(--text-secondary);"></p>
+                    
+                    <!-- Actions -->
+                    <div class="d-flex gap-2 mt-4" id="detail-actions" style="display:none;">
+                        <button class="btn btn-primary w-100" onclick="UI.switchToEditMode()">
+                            <i class="fa-solid fa-pen"></i> Modifier
+                        </button>
+                        <button class="btn btn-outline w-100" style="color:var(--danger);border-color:rgba(255,0,0,0.2);" onclick="UI.deleteCurrentMember()">
+                            <i class="fa-solid fa-trash"></i> Supprimer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Vue Édition / Ajout -->
+                <div id="view-member-form" style="display:none;">
+                    <form id="form-member" onsubmit="event.preventDefault(); UI.saveMember();">
+                        <input type="hidden" id="f-id">
+                        
+                        <!-- Upload Photo -->
+                        <div class="form-group d-flex gap-3 align-items-center">
+                            <div class="card-avatar" id="form-avatar-preview" style="width:64px;height:64px;"></div>
+                            <div>
+                                <input type="file" id="f-photo-input" accept="image/*" style="display:none" onchange="Upload.handleFile(event)">
+                                <input type="hidden" id="f-photo-file">
+                                <button type="button" class="btn btn-outline" onclick="document.getElementById('f-photo-input').click()">Choisir une photo</button>
+                                <div id="upload-progress" style="font-size:0.8rem;color:var(--text-tertiary);margin-top:4px;"></div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <div class="form-group w-100">
+                                <label class="form-label">Prénom *</label>
+                                <input type="text" id="f-firstname" class="form-control" required>
+                            </div>
+                            <div class="form-group w-100">
+                                <label class="form-label">Nom *</label>
+                                <input type="text" id="f-lastname" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Genre</label>
+                            <select id="f-gender" class="form-select">
+                                <option value="M">Homme</option>
+                                <option value="F">Femme</option>
+                                <option value="N">Autre</option>
+                            </select>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <div class="form-group w-100">
+                                <label class="form-label">Naissance (Date)</label>
+                                <input type="date" id="f-birth" class="form-control">
+                            </div>
+                            <div class="form-group w-100">
+                                <label class="form-label">Naissance (Lieu)</label>
+                                <input type="text" id="f-birthplace" class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <div class="form-group w-100">
+                                <label class="form-label">Décès (Date)</label>
+                                <input type="date" id="f-death" class="form-control">
+                            </div>
+                            <div class="form-group w-100">
+                                <label class="form-label">Décès (Lieu)</label>
+                                <input type="text" id="f-deathplace" class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Parent (Optionnel)</label>
+                            <select id="f-parent" class="form-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Conjoint(e) (Optionnel)</label>
+                            <select id="f-spouse" class="form-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Notes</label>
+                            <textarea id="f-notes" class="form-control" rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="sheet-footer" id="form-member-footer" style="display:none;">
+                <button class="btn btn-outline" onclick="UI.switchToDetailMode()">Annuler</button>
+                <button class="btn btn-primary" onclick="UI.saveMember()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTHENTICATION -->
+    <div class="overlay" id="sheet-auth">
+        <div class="bottom-sheet" style="max-width:400px;">
+            <div class="sheet-header">
+                <h2 class="sheet-title">Connexion</h2>
+                <button class="btn-close" onclick="UI.closeSheet('sheet-auth')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sheet-body">
+                <form id="form-auth" onsubmit="event.preventDefault(); API.login();">
+                    <div class="form-group">
+                        <label class="form-label">Nom d'utilisateur</label>
+                        <input type="text" id="auth-user" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mot de passe</label>
+                        <input type="password" id="auth-pass" class="form-control" required>
+                    </div>
+                    <div id="auth-error" class="text-danger" style="font-size:0.9rem;display:none;">Identifiants incorrects.</div>
+                </form>
+            </div>
+            <div class="sheet-footer">
+                <button class="btn btn-primary w-100" onclick="API.login()">Se connecter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="overlay" id="sheet-settings">
+        <div class="bottom-sheet" style="max-width:400px;">
+            <div class="sheet-header">
+                <h2 class="sheet-title">Paramètres</h2>
+                <button class="btn-close" onclick="UI.closeSheet('sheet-settings')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sheet-body">
+                <div class="form-group">
+                    <label class="form-label">Nom de l'arbre</label>
+                    <input type="text" id="s-treename" class="form-control">
+                </div>
+                <!-- Data actions -->
+                <div class="form-group mt-4 pt-4" style="border-top:1px solid var(--border);">
+                    <label class="form-label">Données</label>
+                    <div class="d-flex flex-column gap-2">
+                        <button class="btn btn-outline" onclick="API.exportJSON()"><i class="fa-solid fa-download"></i> Exporter JSON</button>
+                        <button class="btn btn-outline" onclick="document.getElementById('import-input').click()"><i class="fa-solid fa-upload"></i> Importer JSON</button>
+                        <button class="btn btn-outline" style="color:var(--danger);" onclick="API.clearAll()"><i class="fa-solid fa-trash"></i> Vider l'arbre</button>
+                        <input type="file" id="import-input" accept=".json" style="display:none" onchange="API.importJSON(event)">
+                    </div>
+                </div>
+            </div>
+            <div class="sheet-footer">
+                <button class="btn btn-primary" onclick="API.saveSettings()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast">Message</div>
+
+    <!-- SCRIPTS -->
+    <script src="js/api.js"></script>
+    <script src="js/upload.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/tree.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+</html>
