@@ -323,7 +323,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ─── SVG NODES ─────────────────────────────────── */
-.node-group { cursor: pointer; }
+.node-group { cursor: pointer; transform-box: fill-box; transform-origin: center; transition: opacity .22s ease, transform .22s ease; }
 .node-group:hover rect.node-rect { filter: brightness(0.94); }
 .collapse-btn { transition: filter .12s; }
 .collapse-btn:hover { filter: brightness(0.92); }

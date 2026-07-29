@@ -8,6 +8,8 @@
 let members   = [];
 let settings  = { treeName: 'Ma Famille', theme: 0, orientation: 'top' };
 let collapsed = new Set(); // ids des entités (parent/couple) dont les descendants sont repliés
+let lastPositions = {};    // dernières positions rendues (pour animer depuis/vers le bon endroit)
+let lastButtonPos = {};    // dernières positions des boutons collapse/expand
 let scale     = 1;
 let editingId    = null;
 let detailOpenId = null;
@@ -150,6 +152,18 @@ function computeHasChildrenMap() {
   return map;
 }
 
+/** Map { entityKey: nombre d'enfants directs } (indépendant de l'état replié/déplié). */
+function computeChildCountMap() {
+  const map = {};
+  members.forEach(m => {
+    if (m.parentId) {
+      const key = entityKeyOf(m.parentId);
+      map[key] = (map[key] || 0) + 1;
+    }
+  });
+  return map;
+}
+
 /** Ensemble des ids de membres masqués car un de leurs ancêtres est replié. */
 function computeHiddenIds() {
   const hidden = new Set();
@@ -167,12 +181,122 @@ function computeHiddenIds() {
   return hidden;
 }
 
-/** Replie ou déplie la branche descendant de l'entité identifiée par `key`. */
+/** Tous les ids de membres descendant (fils, petits-fils, ...) de l'entité `key`, récursivement. */
+function descendantIdsOf(key) {
+  const km = members.find(x => x.id === key);
+  const parentIds = km && km.spouseId ? [km.id, km.spouseId] : [key];
+  const ids = new Set();
+  function recurse(pids) {
+    members.forEach(m => {
+      if (m.parentId && pids.includes(m.parentId) && !ids.has(m.id)) {
+        ids.add(m.id);
+        recurse([m.id, m.spouseId].filter(Boolean));
+      }
+    });
+  }
+  recurse(parentIds);
+  return ids;
+}
+
+const COLLAPSE_ANIM_MS = 220;
+const COLLAPSE_STAGGER_MS = 28;
+
+/** Point central (écran, avant transform de zoom) d'un membre d'après un cache de positions donné. */
+function centerOf(id, posMap) {
+  const p = posMap[id];
+  if (!p) return null;
+  return { x: p.x + NW / 2, y: p.y + NH / 2 };
+}
+
+/** Replie ou déplie la branche descendant de l'entité identifiée par `key`, avec une animation
+ *  qui fait jaillir/engouffrer les cartes dans le bouton, en cascade. */
 function toggleCollapse(key) {
-  if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
-  settings.collapsed = Array.from(collapsed);
-  saveData();
-  renderTree();
+  const svg = document.getElementById('tree-svg');
+  const willCollapse = !collapsed.has(key);
+  const btn = lastButtonPos[key];
+
+  function targetsFor(ids, posMap, btnRef) {
+    // Ordonne les cartes par distance au bouton pour une cascade cohérente
+    return Array.from(ids)
+      .map(id => ({ id, c: centerOf(id, posMap) }))
+      .filter(t => t.c)
+      .sort((a, b) => {
+        const da = Math.hypot(a.c.x - btnRef.bx, a.c.y - btnRef.by);
+        const db = Math.hypot(b.c.x - btnRef.bx, b.c.y - btnRef.by);
+        return da - db;
+      });
+  }
+
+  if (willCollapse) {
+    const ids = descendantIdsOf(key);
+    if (svg && btn && ids.size) {
+      const targets = targetsFor(ids, lastPositions, btn);
+      targets.forEach((t, i) => {
+        const g = svg.querySelector(`.node-group[data-id="${t.id}"]`);
+        const link = svg.querySelector(`path.link-path[data-child="${t.id}"]`);
+        const delay = i * COLLAPSE_STAGGER_MS;
+        const dx = btn.bx - t.c.x, dy = btn.by - t.c.y;
+        if (g) {
+          g.style.transitionDelay = `${delay}ms`;
+          g.style.transform = `translate(${dx}px,${dy}px) scale(.15)`;
+          g.style.opacity = '0';
+        }
+        if (link) {
+          link.style.transition = `opacity ${COLLAPSE_ANIM_MS}ms ease`;
+          link.style.transitionDelay = `${delay}ms`;
+          link.style.opacity = '0';
+        }
+      });
+    }
+    setTimeout(() => {
+      collapsed.add(key);
+      settings.collapsed = Array.from(collapsed);
+      saveData();
+      renderTree();
+    }, (svg && btn && ids.size) ? COLLAPSE_ANIM_MS + ids.size * COLLAPSE_STAGGER_MS : 0);
+  } else {
+    collapsed.delete(key);
+    settings.collapsed = Array.from(collapsed);
+    saveData();
+    const ids = descendantIdsOf(key);
+    renderTree();
+    // Double rAF : on force l'état "au bouton" à être peint avant d'animer vers la position finale
+    requestAnimationFrame(() => {
+      const svg2 = document.getElementById('tree-svg');
+      const btn2 = lastButtonPos[key];
+      if (!svg2 || !btn2) return;
+      const targets = targetsFor(ids, lastPositions, btn2);
+      targets.forEach((t, i) => {
+        const g = svg2.querySelector(`.node-group[data-id="${t.id}"]`);
+        const link = svg2.querySelector(`path.link-path[data-child="${t.id}"]`);
+        const dx = btn2.bx - t.c.x, dy = btn2.by - t.c.y;
+        if (g) {
+          g.style.transitionDelay = '0ms';
+          g.style.transform = `translate(${dx}px,${dy}px) scale(.15)`;
+          g.style.opacity = '0';
+        }
+        if (link) { link.style.transition = 'none'; link.style.opacity = '0'; }
+      });
+      requestAnimationFrame(() => {
+        targets.forEach((t, i) => {
+          const g = svg2.querySelector(`.node-group[data-id="${t.id}"]`);
+          const link = svg2.querySelector(`path.link-path[data-child="${t.id}"]`);
+          const delay = i * COLLAPSE_STAGGER_MS;
+          if (g) {
+            g.style.transitionDelay = `${delay}ms`;
+            g.style.transitionTimingFunction = 'cubic-bezier(.34,1.56,.64,1)';
+            g.style.transform = '';
+            g.style.opacity = '';
+          }
+          if (link) {
+            link.style.transition = `opacity ${COLLAPSE_ANIM_MS}ms ease`;
+            link.style.transitionDelay = `${delay}ms`;
+            link.style.opacity = '';
+          }
+        });
+      });
+    });
+  }
 }
 
 function genColor(g, light=false) {
@@ -238,33 +362,61 @@ function renderTree() {
     }
   });
 
+  // ─── Positions des boutons collapse/expand (calculées avant les connecteurs,
+  //     pour que les branches partent bien DU bouton et non du parent) ──────
+  const orientationTop = settings.orientation === 'top';
+  const hasChildrenMap = computeHasChildrenMap();
+  const childCountMap = computeChildCountMap();
+  const buttonPos = {};
+  Object.keys(hasChildrenMap).forEach(key => {
+    const pos = positions[key];
+    if (!pos) return;
+    let ax, ay;
+    if (orientationTop) {
+      ax = coupleCenters[key] ? coupleCenters[key].x : pos.x + NW / 2;
+      ay = pos.y + NH;
+    } else {
+      ax = pos.x + NW;
+      ay = coupleCenters[key] ? coupleCenters[key].y : pos.y + NH / 2;
+    }
+    const bx = orientationTop ? ax : ax + GAP_Y / 2;
+    const by = orientationTop ? ay + GAP_Y / 2 : ay;
+    buttonPos[key] = { ax, ay, bx, by, count: childCountMap[key] || 0 };
+  });
+
   // ─── Connecteurs ────────────────────────────────────
   members.forEach(m => {
     const pos = positions[m.id];
     if(!pos) return;
 
-    // Connexion parent → enfant
-    // parent → enfant
+    // Connexion parent → enfant : part du bouton collapse/expand du parent (pas du parent lui-même)
     if (m.parentId && positions[m.parentId]) {
-      const parent = members.find(p => p.id === m.parentId);
+      const parentKey = entityKeyOf(m.parentId);
+      const btn = buttonPos[parentKey];
       let startX, startY;
-      const hasSpouse = parent && parent.spouseId && positions[parent.spouseId];
-      if (hasSpouse && coupleCenters[parent.id]) {
-        startX = coupleCenters[parent.id].x;
-        startY = coupleCenters[parent.id].y;
+      if (btn) {
+        startX = btn.bx;
+        startY = btn.by;
       } else {
-        const pp = positions[parent.id];
-        startX = settings.orientation === 'top' ? pp.x + NW / 2 : pp.x + NW;
-        startY = settings.orientation === 'top' ? pp.y + NH : pp.y + NH / 2;
+        const parent = members.find(p => p.id === m.parentId);
+        const hasSpouse = parent && parent.spouseId && positions[parent.spouseId];
+        if (hasSpouse && coupleCenters[parent.id]) {
+          startX = coupleCenters[parent.id].x;
+          startY = coupleCenters[parent.id].y;
+        } else {
+          const pp = positions[parent.id];
+          startX = orientationTop ? pp.x + NW / 2 : pp.x + NW;
+          startY = orientationTop ? pp.y + NH : pp.y + NH / 2;
+        }
       }
-      const endX = settings.orientation === 'top' ? pos.x + NW / 2 : pos.x;
-      const endY = settings.orientation === 'top' ? pos.y : pos.y + NH / 2;
+      const endX = orientationTop ? pos.x + NW / 2 : pos.x;
+      const endY = orientationTop ? pos.y : pos.y + NH / 2;
       const midY = (startY + endY) / 2, midX = (startX + endX) / 2;
       const col = genColor(genMemo[m.id] - 1);
-      const path = settings.orientation === 'top'
+      const path = orientationTop
         ? `M${startX},${startY} C${startX},${midY} ${endX},${midY} ${endX},${endY}`
         : `M${startX},${startY} C${midX},${startY} ${midX},${endY} ${endX},${endY}`;
-      connectors += `<path d="${path}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-opacity=".55"/>`;
+      connectors += `<path class="link-path" data-child="${m.id}" d="${path}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-opacity=".55"/>`;
     }
 
     // lien de couple + cœur
@@ -349,35 +501,26 @@ function renderTree() {
   });
 
   // ─── Boutons collapse/expand (entre parent et enfants) ──
-  const hasChildrenMap = computeHasChildrenMap();
-  const orientationTop = settings.orientation === 'top';
-  Object.keys(hasChildrenMap).forEach(key => {
-    const pos = positions[key];
-    if (!pos) return; // le parent doit être visible (toujours le cas : on ne masque que les descendants)
-    let ax, ay;
-    if (orientationTop) {
-      ax = coupleCenters[key] ? coupleCenters[key].x : pos.x + NW / 2;
-      ay = pos.y + NH; // bord inférieur de la ligne du parent
-    } else {
-      ax = pos.x + NW; // bord droit
-      ay = coupleCenters[key] ? coupleCenters[key].y : pos.y + NH / 2;
-    }
-    const bx = orientationTop ? ax : ax + GAP_Y / 2;
-    const by = orientationTop ? ay + GAP_Y / 2 : ay;
+  Object.keys(buttonPos).forEach(key => {
+    const { ax, ay, bx, by, count } = buttonPos[key];
     const isCollapsed = collapsed.has(key);
     const col = genColor(genMemo[key] ?? 0);
+    const r = count > 1 ? 16 : 13;
+    const fontSize = count > 1 ? 14 : 12;
 
     connectors += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${col}" stroke-width="1.6" stroke-opacity=".4"/>`;
-    connectors += `<circle class="collapse-btn" cx="${bx}" cy="${by}" r="13" fill="#ffffff" stroke="${col}" stroke-width="1.6" filter="url(#shadow)" style="cursor:pointer" onclick="toggleCollapse('${key}')"/>`;
+    connectors += `<circle class="collapse-btn" data-key="${key}" cx="${bx}" cy="${by}" r="${r}" fill="#ffffff" stroke="${col}" stroke-width="1.6" filter="url(#shadow)" style="cursor:pointer" onclick="toggleCollapse('${key}')"/>`;
     const arrow = orientationTop
       ? (isCollapsed ? '▸' : '▾')
       : (isCollapsed ? '▾' : '▸');
-    connectors += `<text x="${bx}" y="${by + 4}" text-anchor="middle" font-size="12" fill="${col}" style="pointer-events:none">${arrow}</text>`;
+    connectors += `<text x="${bx}" y="${by + fontSize/3}" text-anchor="middle" font-size="${fontSize}" fill="${col}" style="pointer-events:none">${arrow}</text>`;
   });
 
   defs += '</defs>';
   svg.innerHTML = defs + connectors + nodes;
   applyTransform();
+  lastPositions = positions;
+  lastButtonPos = buttonPos;
 }
 
 /** Placeholder SVG élégant avec initiales + icône genre */
