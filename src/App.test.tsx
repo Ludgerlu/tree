@@ -69,3 +69,53 @@ test('searches for a person and highlights their tree card', async () => {
     expect(container.querySelector('[data-id="member-ada"]')).toHaveClass('search-highlight');
   });
 });
+
+test('asks the user to choose when multiple people share a name', async () => {
+  const person = (id: string, birth: string) => ({
+    id,
+    firstname: 'Alex',
+    lastname: 'Martin',
+    gender: 'N',
+    birth,
+    birthplace: null,
+    death: null,
+    deathplace: null,
+    parentId: null,
+    spouseId: null,
+    notes: null,
+    photo: null,
+  });
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      json: () => Promise.resolve({
+        ok: true,
+        members: [person('alex-1', '1980-01-01'), person('alex-2', '2001-01-01')],
+        settings: {},
+      }),
+    })
+  ) as jest.Mock;
+
+  const { container } = render(<App />);
+  await waitFor(() => {
+    expect(container.querySelectorAll('.node-group')).toHaveLength(2);
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Rechercher une personne' }));
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Rechercher une personne' }), {
+    target: { value: 'Alex Martin' },
+  });
+  fireEvent.submit(screen.getByRole('searchbox', { name: 'Rechercher une personne' }).closest('form')!);
+
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+  });
+
+  expect(screen.getByText('2 personnes trouvées. Choisissez la bonne personne.')).toBeInTheDocument();
+  expect(screen.getByText('Né(e) 1980')).toBeInTheDocument();
+  expect(screen.getByText('Né(e) 2001')).toBeInTheDocument();
+  expect(container.querySelectorAll('.node-group.search-highlight')).toHaveLength(0);
+
+  fireEvent.click(screen.getByRole('button', { name: /Né\(e\) 2001/ }));
+
+  expect(container.querySelector('[data-id="alex-2"]')).toHaveClass('search-highlight');
+  expect(container.querySelector('[data-id="alex-1"]')).not.toHaveClass('search-highlight');
+});

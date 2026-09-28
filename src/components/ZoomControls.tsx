@@ -31,6 +31,7 @@ export default function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, onFi
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+  const [searchResults, setSearchResults] = useState<Member[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,20 +45,48 @@ export default function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, onFi
 
     setSearching(true);
     setSearchMessage('Recherche en cours…');
+    setSearchResults([]);
     window.setTimeout(() => {
-      const matchingMember = members.find((member) =>
+      const exactMatches = members.filter((member) =>
         `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase() === normalizedQuery
-      ) ?? members.find((member) =>
+      );
+      const matchingMembers = exactMatches.length ? exactMatches : members.filter((member) =>
         `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase().includes(normalizedQuery)
       );
 
-      if (matchingMember && onFocusMember(matchingMember.id)) {
-        setSearchMessage(`${matchingMember.firstname} ${matchingMember.lastname} trouvé`);
+      if (matchingMembers.length > 1) {
+        setSearchResults(matchingMembers);
+        setSearchMessage(`${matchingMembers.length} personnes trouvées. Choisissez la bonne personne.`);
+      } else if (matchingMembers.length === 1 && onFocusMember(matchingMembers[0].id)) {
+        setSearchMessage(`${matchingMembers[0].firstname} ${matchingMembers[0].lastname} trouvé`);
       } else {
         setSearchMessage('Aucune personne trouvée');
       }
       setSearching(false);
     }, 300);
+  };
+
+  const selectSearchResult = (member: Member) => {
+    if (!onFocusMember(member.id)) {
+      setSearchMessage('Impossible d’afficher cette personne');
+      return;
+    }
+    setSearchResults([]);
+    setSearchMessage(`${member.firstname} ${member.lastname} sélectionné`);
+  };
+
+  const getMemberClues = (member: Member) => {
+    const clues = [
+      member.birth ? `Né(e) ${member.birth.slice(0, 4)}` : '',
+      member.death ? `Décès ${member.death.slice(0, 4)}` : '',
+      member.birthplace || '',
+      member.deathplace || '',
+    ].filter(Boolean);
+    const parent = members.find((candidate) => candidate.id === member.parentId);
+    const spouse = members.find((candidate) => candidate.id === member.spouseId);
+    if (parent) clues.push(`Parent : ${parent.firstname} ${parent.lastname}`);
+    if (spouse) clues.push(`Conjoint(e) : ${spouse.firstname} ${spouse.lastname}`);
+    return clues.join(' · ') || 'Aucun autre détail enregistré';
   };
 
   return (
@@ -85,6 +114,7 @@ export default function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, onFi
               onChange={(event) => {
                 setQuery(event.target.value);
                 setSearchMessage('');
+                setSearchResults([]);
               }}
               placeholder="Nom ou prénom"
               autoComplete="off"
@@ -96,6 +126,18 @@ export default function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, onFi
           <p className="zoom-search-status" role="status" aria-live="polite">
             {searching ? <><span className="search-spinner" aria-hidden="true" />{searchMessage}</> : searchMessage}
           </p>
+          {searchResults.length > 0 && (
+            <ul className="zoom-search-results" aria-label="Résultats de recherche">
+              {searchResults.map((member, index) => (
+                <li key={member.id}>
+                  <button type="button" className="zoom-search-result" onClick={() => selectSearchResult(member)}>
+                    <span className="zoom-search-result-name">{member.firstname} {member.lastname}</span>
+                    <span className="zoom-search-result-detail">{getMemberClues(member)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </form>
       )}
       <span className="zoom-divider"></span>
