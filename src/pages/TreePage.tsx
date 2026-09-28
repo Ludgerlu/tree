@@ -154,10 +154,6 @@ export default function TreePage() {
     [editingMember, addMember, updateMember, expandTo]
   );
 
-  const handleJump = useCallback((id: string) => {
-    setDetailId(null);
-    window.setTimeout(() => setDetailId(id), 180);
-  }, []);
   const handleJump = useCallback(
     (id: string) => {
       expandTo(id); // déplie les ancêtres si la cible est dans une branche repliée
@@ -226,6 +222,8 @@ export default function TreePage() {
             scale={scale}
             svgRef={svgRef}
             highlightedMemberId={highlightedMemberId}
+            selectedId={detailId}
+            collapsedIds={collapsedIds}
             onToggleCollapse={toggleCollapse}
             onOpenDetail={setDetailId}
             onEditFromNode={requestEdit}
