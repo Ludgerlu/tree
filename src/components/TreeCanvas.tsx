@@ -1,17 +1,28 @@
 /**
  * components/TreeCanvas.tsx
- * Rendu SVG de l'arbre — reprend renderTree() de l'ancien script.js
- * (connecteurs parent→enfant, lien conjoint, nœuds avec photo/initiales).
+ * Rendu SVG de l'arbre : connecteurs, nœuds, bouton replier/déplier (+/−) et
+ * focus sur le chemin du membre sélectionné (les autres éléments sont floutés).
  */
 import React, { useMemo } from 'react';
 import { Member, Settings } from '../types';
 import { THEMES } from '../services/themes';
-import { computeAllGens, genColor, initials, layoutTree, truncate } from '../services/treeLayout';
+import {
+  buildChildMap,
+  computeAllGens,
+  genColor,
+  getDescendantIds,
+  getFocusPath,
+  getVisibleMembers,
+  initials,
+  layoutTree,
+  truncate,
+} from '../services/treeLayout';
 
 const NW = 158;
 const NH = 80;
 const NRX = 12;
 const PHOTO_R = 22;
+const BLUR_ID = 'tree-blur';
 
 interface Props {
   members: Member[];
@@ -19,22 +30,39 @@ interface Props {
   scale: number;
   svgRef: React.RefObject<SVGSVGElement>;
   highlightedMemberId: string | null;
+  selectedId: string | null;
+  collapsedIds: Set<string>;
+  onToggleCollapse: (id: string) => void;
   onOpenDetail: (id: string) => void;
   onEditFromNode: (id: string) => void;
 }
 
-export default function TreeCanvas({ members, settings, scale, svgRef, highlightedMemberId, onOpenDetail, onEditFromNode }: Props) {
+export default function TreeCanvas({
+  members,
+  settings,
+  scale,
+  svgRef,
+  selectedId,
+  collapsedIds,
+  highlightedMemberId,
+  onToggleCollapse,
+  onOpenDetail,
+  onEditFromNode,
+}: Props) {
   const theme = THEMES[settings.theme] ?? THEMES[0];
+  const focus = selectedId ? getFocusPath(members, selectedId) : null;
 
-  const { positions, genMemo, width, height } = useMemo(() => {
-    const positions = layoutTree(members, settings);
+  const { visible, positions, genMemo, childMap, width, height } = useMemo(() => {
+      const visible = getVisibleMembers(members, collapsedIds);
+    const positions = layoutTree(visible, settings);
     const genMemo = computeAllGens(members);
+    const childMap = buildChildMap(members);
     const allX = Object.values(positions).map((p) => p.x);
     const allY = Object.values(positions).map((p) => p.y);
     const width = members.length ? Math.max(...allX) + NW + 80 : 0;
     const height = members.length ? Math.max(...allY) + NH + 80 : 0;
-    return { positions, genMemo, width, height };
-  }, [members, settings]);
+    return { visible, positions, genMemo, childMap, width, height };
+  }, [members, settings, collapsedIds]);
 
   if (members.length === 0) {
     return (
@@ -49,11 +77,16 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
     );
   }
 
-  const connectors: React.ReactNode[] = [];
-  const nodes: React.ReactNode[] = [];
-  const clipPaths: React.ReactNode[] = [];
+  // Deux couches : éléments nets et éléments floutés (un seul filtre pour tout le groupe flouté)
+  const clear: React.ReactNode[] = [];
+  const dim: React.ReactNode[] = [];
+  const layerFor = (isDim: boolean) => (isDim ? dim : clear);
 
-  members.forEach((m) => {
+  // Connecteurs (derrière les nœuds)
+  const connectorsClear: React.ReactNode[] = [];
+  const connectorsDim: React.ReactNode[] = [];
+
+  visible.forEach((m) => {
     const pos = positions[m.id];
     if (!pos) return;
 
@@ -65,7 +98,8 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
       const y2 = pos.y;
       const my = (y1 + y2) / 2;
       const col = genColor(theme, genMemo[m.id] - 1);
-      connectors.push(
+      const isDim = !!focus && !focus.links.has(`${m.parentId}>${m.id}`);
+      (isDim ? connectorsDim : connectorsClear).push(
         <path
           key={`c-${m.id}`}
           d={`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`}
@@ -80,17 +114,14 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
 
     if (m.spouseId && positions[m.spouseId] && m.id < m.spouseId) {
       const sp = positions[m.spouseId];
-      const x1 = pos.x + NW;
-      const y1 = pos.y + NH / 2;
-      const x2 = sp.x;
-      const y2 = sp.y + NH / 2;
-      connectors.push(
+      const isDim = !!focus && !(focus.nodes.has(m.id) && focus.nodes.has(m.spouseId));
+      (isDim ? connectorsDim : connectorsClear).push(
         <line
           key={`s-${m.id}`}
-          x1={x1}
-          y1={y1}
-          x2={x2}
-          y2={y2}
+          x1={pos.x + NW}
+          y1={pos.y + NH / 2}
+          x2={sp.x}
+          y2={sp.y + NH / 2}
           stroke="#a89880"
           strokeWidth={1.5}
           strokeDasharray="5,4"
@@ -100,7 +131,9 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
     }
   });
 
-  members.forEach((m) => {
+  const clipPaths: React.ReactNode[] = [];
+
+  visible.forEach((m) => {
     const pos = positions[m.id];
     if (!pos) return;
     const g = genMemo[m.id] ?? 0;
@@ -112,6 +145,8 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
     const cx = pos.x + PHOTO_R + 12;
     const cy = pos.y + NH / 2;
     const textX = pos.x + PHOTO_R * 2 + 20;
+    const isDim = !!focus && !focus.nodes.has(m.id);
+    const layer = layerFor(isDim);
 
     clipPaths.push(
       <clipPath id={photoId} key={`clip-${m.id}`}>
@@ -119,7 +154,7 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
       </clipPath>
     );
 
-    nodes.push(
+    layer.push(
       <g
         key={m.id}
         className={`node-group${highlightedMemberId === m.id ? ' search-highlight' : ''}`}
@@ -204,6 +239,43 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
         )}
       </g>
     );
+
+    // Bouton replier / déplier — hors du <g class="node-group"> : un clic ne peut donc pas ouvrir la fiche
+    if ((childMap[m.id] || []).length > 0) {
+      const isCollapsed = collapsedIds.has(m.id);
+      const hidden = isCollapsed ? getDescendantIds(members, m.id, childMap).length : 0;
+      const label = isCollapsed ? `+${hidden}` : '−';
+      const bw = isCollapsed ? Math.max(26, label.length * 7 + 14) : 20;
+      const bx = pos.x + NW / 2;
+      const by = pos.y + NH;
+      layer.push(
+        <g
+          key={`t-${m.id}`}
+          className="collapse-btn"
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse(m.id);
+          }}
+        >
+          <title>{isCollapsed ? `Déplier (${hidden} masqué${hidden > 1 ? 's' : ''})` : 'Replier'}</title>
+          <rect x={bx - bw / 2} y={by - 10} width={bw} height={20} rx={10} fill={isCollapsed ? col : '#ffffff'} stroke={col} strokeWidth={1.5} />
+          <text
+            x={bx}
+            y={by + 1}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={isCollapsed ? '#ffffff' : col}
+            fontFamily="'Inter', system-ui, sans-serif"
+            fontSize={12}
+            fontWeight={700}
+            style={{ pointerEvents: 'none' }}
+          >
+            {label}
+          </text>
+        </g>
+      );
+    }
   });
 
   return (
@@ -216,9 +288,21 @@ export default function TreeCanvas({ members, settings, scale, svgRef, highlight
       style={{ transform: `scale(${scale})` }}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <defs>{clipPaths}</defs>
-      {connectors}
-      {nodes}
+      <defs>
+        {clipPaths}
+        {/* userSpaceOnUse : un trait horizontal (bbox de hauteur 0) disparaîtrait avec la région par défaut */}
+        <filter id={BLUR_ID} filterUnits="userSpaceOnUse" x={0} y={0} width={width} height={height}>
+          <feGaussianBlur in="SourceGraphic" stdDeviation={4} />
+        </filter>
+      </defs>
+      {focus && (
+        <g filter={`url(#${BLUR_ID})`}>
+          {connectorsDim}
+          {dim}
+        </g>
+      )}
+      {connectorsClear}
+      {clear}
     </svg>
   );
 }

@@ -8,6 +8,19 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Member, Settings } from '../types';
 import { api } from '../services/api';
 import { applyThemeVars } from '../services/themes';
+import { getAncestorIds } from '../services/treeLayout';
+
+const COLLAPSED_KEY = 'arbre.collapsed';
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set<string>(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set<string>();
+  }
+}
 
 const DEFAULT_SETTINGS: Settings = { treeName: 'Ma Famille', theme: 0, orientation: 'top' };
 
@@ -22,6 +35,9 @@ interface AppContextValue {
   isAuthenticated: boolean;
   loading: boolean;
   toast: ToastState;
+  collapsedIds: Set<string>;
+  toggleCollapse: (id: string) => void;
+  expandTo: (id: string, includeSelf?: boolean) => void;
   showToast: (msg: string) => void;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -40,6 +56,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(loadCollapsed);
 
   const [toastMsg, setToastMsg] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -196,12 +213,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [handleError, showToast]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Array.from(collapsedIds)));
+    } catch {
+      /* stockage indisponible : le repli reste valable pour la session */
+    }
+  }, [collapsedIds]);
+
+  const toggleCollapse = useCallback((id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /** Déplie les ancêtres de `id` (et `id` lui-même si includeSelf) pour le rendre visible. */
+  const expandTo = useCallback(
+    (id: string, includeSelf = false) => {
+      const ids = getAncestorIds(members, id);
+      if (includeSelf) ids.push(id);
+      setCollapsedIds((prev) => {
+        if (!ids.some((x) => prev.has(x))) return prev;
+        const next = new Set(prev);
+        ids.forEach((x) => next.delete(x));
+        return next;
+      });
+    },
+    [members]
+  );
+
   const value: AppContextValue = {
     members,
     settings,
     isAuthenticated,
     loading,
     toast: { message: toastMsg, visible: toastVisible },
+    collapsedIds,
+    toggleCollapse,
+    expandTo,
     showToast,
     login,
     logout,

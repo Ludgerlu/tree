@@ -9,11 +9,12 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   className?: string;
+  overlayClassName?: string;
   boxStyle?: React.CSSProperties;
   children: React.ReactNode;
 }
 
-export default function Modal({ open, onClose, className, boxStyle, children }: ModalProps) {
+export default function Modal({ open, onClose, className, overlayClassName, boxStyle, children }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -25,7 +26,7 @@ export default function Modal({ open, onClose, className, boxStyle, children }: 
 
   return (
     <div
-      className={`modal-overlay${open ? ' open' : ''}`}
+      className={`modal-overlay${open ? ' open' : ''}${overlayClassName ? ' ' + overlayClassName : ''}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

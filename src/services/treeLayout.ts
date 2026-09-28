@@ -145,3 +145,78 @@ export function genColor(theme: ThemeDefinition, g: number, light = false): stri
   const idx = Math.min(Math.max(g, 0), 4);
   return (light ? theme[lkeys[idx]] : theme[keys[idx]]) as string;
 }
+
+/* ─── Repli / dépli des branches & focus sur le chemin ─────────────── */
+
+export function buildChildMap(members: Member[]): Record<string, Member[]> {
+  const map: Record<string, Member[]> = {};
+  members.forEach((m) => {
+    if (m.parentId) {
+      map[m.parentId] = map[m.parentId] || [];
+      map[m.parentId].push(m);
+    }
+  });
+  return map;
+}
+
+/** Tous les descendants (tous niveaux) d'un membre. */
+export function getDescendantIds(members: Member[], id: string, childMap?: Record<string, Member[]>): string[] {
+  const map = childMap ?? buildChildMap(members);
+  const out: string[] = [];
+  const seen = new Set<string>([id]);
+  const stack = [id];
+  while (stack.length) {
+    const cur = stack.pop() as string;
+    (map[cur] || []).forEach((c) => {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        out.push(c.id);
+        stack.push(c.id);
+      }
+    });
+  }
+  return out;
+}
+
+/** Membres affichés : tout sauf les descendants d'un nœud replié. */
+export function getVisibleMembers(members: Member[], collapsed: ReadonlySet<string>): Member[] {
+  if (collapsed.size === 0) return members;
+  const map = buildChildMap(members);
+  const hidden = new Set<string>();
+  collapsed.forEach((id) => getDescendantIds(members, id, map).forEach((d) => hidden.add(d)));
+  return members.filter((m) => !hidden.has(m.id));
+}
+
+/** Ancêtres d'un membre, du parent direct jusqu'à la racine. */
+export function getAncestorIds(members: Member[], id: string): string[] {
+  const byId = new Map(members.map((m) => [m.id, m] as [string, Member]));
+  const out: string[] = [];
+  const seen = new Set<string>([id]);
+  let cur = byId.get(id);
+  while (cur && cur.parentId && !seen.has(cur.parentId)) {
+    out.push(cur.parentId);
+    seen.add(cur.parentId);
+    cur = byId.get(cur.parentId);
+  }
+  return out;
+}
+
+export interface FocusPath {
+  nodes: Set<string>; // membre + ancêtres (+ conjoints de ces membres)
+  links: Set<string>; // liens parent→enfant du chemin, clé "parentId>childId"
+}
+
+export function getFocusPath(members: Member[], id: string): FocusPath {
+  const byId = new Map(members.map((m) => [m.id, m] as [string, Member]));
+  const chain = [id].concat(getAncestorIds(members, id));
+  const nodes = new Set<string>(chain);
+  const links = new Set<string>();
+  chain.forEach((cid, i) => {
+    if (i > 0) links.add(`${cid}>${chain[i - 1]}`);
+  });
+  chain.forEach((cid) => {
+    const sp = byId.get(cid)?.spouseId;
+    if (sp) nodes.add(sp);
+  });
+  return { nodes, links };
+}

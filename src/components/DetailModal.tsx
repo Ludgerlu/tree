@@ -28,7 +28,7 @@ interface Props {
 export default function DetailModal({ open, member, members, genMemo, theme, isAuthenticated, onClose, onJump, onEdit }: Props) {
   if (!member) {
     return (
-      <Modal open={open} onClose={onClose} className="detail-box">
+      <Modal open={open} onClose={onClose} className="detail-box" overlayClassName="detail-overlay">
         <div />
       </Modal>
     );
@@ -94,7 +94,7 @@ export default function DetailModal({ open, member, members, genMemo, theme, isA
   };
 
   return (
-    <Modal open={open} onClose={onClose} className="detail-box">
+    <Modal open={open} onClose={onClose} className="detail-box" overlayClassName="detail-overlay">
       <div className="modal-header">
         <h2 className="modal-title">
           {member.firstname} {member.lastname}

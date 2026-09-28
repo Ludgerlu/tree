@@ -43,6 +43,7 @@ export default function TreePage() {
     members, settings, isAuthenticated, loading, toast,
     login, logout, addMember, updateMember, deleteMember,
     saveSettings, importData, clearAll,
+    collapsedIds, toggleCollapse, expandTo,
   } = useApp();
 
   const { containerRef, svgRef, scale, zoomIn, zoomOut, resetZoom, fitView, focusMember } = usePanZoom();
@@ -147,14 +148,24 @@ export default function TreePage() {
     async (member: Member) => {
       if (editingMember) await updateMember(member);
       else await addMember(member);
+      // le nouveau membre (ou le membre déplacé) ne doit pas se retrouver caché dans une branche repliée
+      if (member.parentId) expandTo(member.parentId, true);
     },
-    [editingMember, addMember, updateMember]
+    [editingMember, addMember, updateMember, expandTo]
   );
 
   const handleJump = useCallback((id: string) => {
     setDetailId(null);
     window.setTimeout(() => setDetailId(id), 180);
   }, []);
+  const handleJump = useCallback(
+    (id: string) => {
+      expandTo(id); // déplie les ancêtres si la cible est dans une branche repliée
+      setDetailId(null);
+      window.setTimeout(() => setDetailId(id), 180);
+    },
+    [expandTo]
+  );
 
   const handleFocusMember = useCallback((id: string) => {
     if (!focusMember(id)) return false;
@@ -215,6 +226,7 @@ export default function TreePage() {
             scale={scale}
             svgRef={svgRef}
             highlightedMemberId={highlightedMemberId}
+            onToggleCollapse={toggleCollapse}
             onOpenDetail={setDetailId}
             onEditFromNode={requestEdit}
           />
