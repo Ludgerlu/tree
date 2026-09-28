@@ -59,6 +59,22 @@ export function usePanZoom() {
   const zoomIn = useCallback(() => setScale((s) => Math.min(3, s + 0.12)), []);
   const zoomOut = useCallback(() => setScale((s) => Math.max(0.3, s - 0.12)), []);
 
+  const resetZoom = useCallback(() => setScale(1), []);
+
+  const focusMember = useCallback((memberId: string) => {
+    const inner = containerRef.current;
+    const svg = svgRef.current;
+    const node = svg && Array.from(svg.querySelectorAll<SVGGElement>('.node-group'))
+      .find((candidate) => candidate.dataset.id === memberId);
+    if (!inner || !node) return false;
+
+    const nodeBounds = node.getBoundingClientRect();
+    const containerBounds = inner.getBoundingClientRect();
+    inner.scrollLeft += nodeBounds.left + nodeBounds.width / 2 - (containerBounds.left + containerBounds.width / 2);
+    inner.scrollTop += nodeBounds.top + nodeBounds.height / 2 - (containerBounds.top + containerBounds.height / 2);
+    return true;
+  }, []);
+
   const fitView = useCallback(() => {
     const inner = containerRef.current;
     const wrap = inner?.parentElement; // #canvas-wrap
@@ -74,5 +90,5 @@ export function usePanZoom() {
     inner.scrollTop = 0;
   }, []);
 
-  return { containerRef, svgRef, scale, zoomIn, zoomOut, fitView };
+  return { containerRef, svgRef, scale, zoomIn, zoomOut, resetZoom, fitView, focusMember };
 }

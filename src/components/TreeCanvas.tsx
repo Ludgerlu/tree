@@ -18,11 +18,12 @@ interface Props {
   settings: Settings;
   scale: number;
   svgRef: React.RefObject<SVGSVGElement>;
+  highlightedMemberId: string | null;
   onOpenDetail: (id: string) => void;
   onEditFromNode: (id: string) => void;
 }
 
-export default function TreeCanvas({ members, settings, scale, svgRef, onOpenDetail, onEditFromNode }: Props) {
+export default function TreeCanvas({ members, settings, scale, svgRef, highlightedMemberId, onOpenDetail, onEditFromNode }: Props) {
   const theme = THEMES[settings.theme] ?? THEMES[0];
 
   const { positions, genMemo, width, height } = useMemo(() => {
@@ -121,7 +122,7 @@ export default function TreeCanvas({ members, settings, scale, svgRef, onOpenDet
     nodes.push(
       <g
         key={m.id}
-        className="node-group"
+        className={`node-group${highlightedMemberId === m.id ? ' search-highlight' : ''}`}
         data-id={m.id}
         onClick={() => onOpenDetail(m.id)}
         onContextMenu={(e) => {

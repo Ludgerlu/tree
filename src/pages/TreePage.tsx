@@ -8,6 +8,8 @@ import React, { useCallback, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { usePanZoom } from '../hooks/usePanZoom';
 import Header from '../components/Header';
+import BottomNav from '../components/BottomNav';
+import ZoomControls from '../components/ZoomControls';
 import LegendBar from '../components/LegendBar';
 import TreeCanvas from '../components/TreeCanvas';
 import EmptyState from '../components/EmptyState';
@@ -43,7 +45,7 @@ export default function TreePage() {
     saveSettings, importData, clearAll,
   } = useApp();
 
-  const { containerRef, svgRef, scale, zoomIn, zoomOut, fitView } = usePanZoom();
+  const { containerRef, svgRef, scale, zoomIn, zoomOut, resetZoom, fitView, focusMember } = usePanZoom();
 
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -55,6 +57,7 @@ export default function TreePage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [highlightedMemberId, setHighlightedMemberId] = useState<string | null>(null);
 
   const openAdd = useCallback((parentId: string | null) => {
     setEditingMember(null);
@@ -153,6 +156,15 @@ export default function TreePage() {
     window.setTimeout(() => setDetailId(id), 180);
   }, []);
 
+  const handleFocusMember = useCallback((id: string) => {
+    if (!focusMember(id)) return false;
+    setHighlightedMemberId(id);
+    window.setTimeout(() => {
+      setHighlightedMemberId((currentId) => currentId === id ? null : currentId);
+    }, 5000);
+    return true;
+  }, [focusMember]);
+
   const handleEditFromDetail = useCallback(
     (id: string) => {
       setDetailId(null);
@@ -187,9 +199,6 @@ export default function TreePage() {
       <Header
         treeName={settings.treeName}
         isAuthenticated={isAuthenticated}
-        onFitView={fitView}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
         onAdd={() => requestAdd(null)}
         onLogin={() => setAuthOpen(true)}
         onLogout={logout}
@@ -205,12 +214,30 @@ export default function TreePage() {
             settings={settings}
             scale={scale}
             svgRef={svgRef}
+            highlightedMemberId={highlightedMemberId}
             onOpenDetail={setDetailId}
             onEditFromNode={requestEdit}
           />
         </div>
         <EmptyState show={members.length === 0} isAuthenticated={isAuthenticated} onAdd={() => requestAdd(null)} />
+
+        <ZoomControls
+          scale={scale}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onReset={resetZoom}
+          onFit={fitView}
+          members={members}
+          onFocusMember={handleFocusMember}
+        />
       </div>
+
+      <BottomNav
+        onHome={fitView}
+        onAdd={() => requestAdd(null)}
+        onExport={() => setExportOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
+      />
 
       <MemberModal
         open={memberModalOpen}
