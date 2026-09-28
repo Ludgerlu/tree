@@ -1,0 +1,9 @@
+{
+  "short_name": "Arbre Généalogique",
+  "name": "Arbre Généalogique",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2d5a3d",
+  "background_color": "#f9f6f0"
+}

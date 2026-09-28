@@ -286,13 +286,6 @@ input, select, textarea { font-family: inherit; }
   transition: transform .28s var(--ease);
   transform-origin: 0 0;
 }
-#tree-svg text {
-  pointer-events: none;
-}
-/* Pour un cœur un peu plus gros */
-#tree-svg text[fill="#c0392b"] {
-  font-size: 16px;
-}
 
 /* Empty state */
 #empty-state {
@@ -323,10 +316,8 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ─── SVG NODES ─────────────────────────────────── */
-.node-group { cursor: pointer; transform-box: fill-box; transform-origin: center; transition: opacity .22s ease, transform .22s ease; }
+.node-group { cursor: pointer; }
 .node-group:hover rect.node-rect { filter: brightness(0.94); }
-.collapse-btn { transition: filter .12s; }
-.collapse-btn:hover { filter: brightness(0.92); }
 
 /* Node text styling - optimized for family tree */
 .node-name {
@@ -571,16 +562,6 @@ input, select, textarea { font-family: inherit; }
   color: var(--text-light); 
   margin-bottom: 9px;
 }
-.detail-family-photos {
-  margin-top: 16px;
-}
-.detail-family-photos img {
-  transition: transform .15s, box-shadow .15s;
-}
-.detail-family-photos img:hover {
-  transform: scale(1.05);
-  box-shadow: var(--shadow-sm);
-}
 .family-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .family-list li {
   display: flex; align-items: center; gap: 10px;
@@ -804,115 +785,3 @@ input, select, textarea { font-family: inherit; }
   animation: spin .7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ─── BARRE DE STATUT UTILISATEUR ─────────────────── */
-.header-sep {
-  width: 1px;
-  height: 28px;
-  background: var(--border);
-  margin: 0 4px;
-  flex-shrink: 0;
-}
-
-.user-status-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background: var(--bg-page);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  color: var(--text-muted);
-  transition: border-color .2s, background .2s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.user-status-bar.connected {
-  border-color: rgba(45, 90, 61, .3);
-  background: var(--accent-bg);
-}
-
-/* Pastille de statut (en ligne / hors ligne) */
-.user-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-  box-shadow: 0 0 0 2px rgba(45, 90, 61, .2);
-  animation: pulse-dot 2.5s ease-in-out infinite;
-}
-.user-status-dot.offline {
-  background: var(--text-light);
-  box-shadow: none;
-  animation: none;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(45,90,61,.2); }
-  50%       { box-shadow: 0 0 0 4px rgba(45,90,61,.08); }
-}
-
-/* Nom affiché */
-.user-status-name {
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  font-size: var(--text-xs);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Badge de rôle */
-.user-status-role {
-  font-size: 10px;
-  font-weight: var(--font-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wider);
-  padding: 2px 7px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-}
-
-/* Bouton clé (changer mot de passe) */
-.user-status-pw {
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  cursor: pointer;
-  font-size: 12px;
-  opacity: .6;
-  transition: opacity .15s, transform .15s;
-  line-height: 1;
-}
-.user-status-pw:hover {
-  opacity: 1;
-  transform: scale(1.15) rotate(-8deg);
-}
-
-/* ─── LOADING OVERLAY (override pour flex) ─────────── */
-#loading-overlay {
-  display: none;
-  position: fixed; inset: 0; z-index: 9999;
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(4px);
-  flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 14px; font-size: 14px; color: var(--text-muted);
-}
-
-/* ─── RESPONSIVE user-status ───────────────────────── */
-@media (max-width: 768px) {
-  .user-status-bar { padding: 5px 8px; }
-  .user-status-role { display: none; }
-  .user-status-name { max-width: 80px; }
-}
-@media (max-width: 520px) {
-  .user-status-bar { display: none; }
-}
-
-/* ─── SUCCESS color var (si manquant) ───────────────── */
-:root { --success: #1D9E75; }
