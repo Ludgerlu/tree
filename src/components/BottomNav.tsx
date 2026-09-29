@@ -8,7 +8,7 @@ interface Props {
   onSettings: () => void;
   memberCount: number;
   members: Member[];
-  onFocusMember: (id: string) => boolean;
+  onFocusMember: (id: string) => boolean | Promise<boolean>;
 }
 
 const iconProps = {
@@ -29,12 +29,26 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
     const [searching, setSearching] = useState(false);
     const [searchMessage, setSearchMessage] = useState('');
     const [searchResults, setSearchResults] = useState<Member[]>([]);
+    const searchAreaRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
       if (searchOpen) searchInputRef.current?.focus();
     }, [searchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!searchAreaRef.current?.contains(event.target as Node)) {
+        setSearchOpen(false);
+        setSearchMessage('');
+        setSearchResults([]);
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [searchOpen]);
   
-    const searchMember = (event: FormEvent<HTMLFormElement>) => {
+    const searchMember = async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const normalizedQuery = query.trim().toLocaleLowerCase();
       if (!normalizedQuery || searching) return;
@@ -42,28 +56,32 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
       setSearching(true);
       setSearchMessage('Recherche en cours…');
       setSearchResults([]);
-      window.setTimeout(() => {
+      try {
         const exactMatches = members.filter((member) =>
           `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase() === normalizedQuery
         );
         const matchingMembers = exactMatches.length ? exactMatches : members.filter((member) =>
           `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase().includes(normalizedQuery)
         );
-  
+
         if (matchingMembers.length > 1) {
           setSearchResults(matchingMembers);
           setSearchMessage(`${matchingMembers.length} personnes trouvées. Choisissez la bonne personne.`);
-        } else if (matchingMembers.length === 1 && onFocusMember(matchingMembers[0].id)) {
-          setSearchMessage(`${matchingMembers[0].firstname} ${matchingMembers[0].lastname} trouvé`);
+        } else if (matchingMembers.length === 1) {
+          const member = matchingMembers[0];
+          setSearchMessage(await onFocusMember(member.id)
+            ? `${member.firstname} ${member.lastname} trouvé`
+            : 'Impossible d’afficher cette personne');
         } else {
           setSearchMessage('Aucune personne trouvée');
         }
+      } finally {
         setSearching(false);
-      }, 300);
+      }
     };
-  
-    const selectSearchResult = (member: Member) => {
-      if (!onFocusMember(member.id)) {
+
+    const selectSearchResult = async (member: Member) => {
+      if (!await onFocusMember(member.id)) {
         setSearchMessage('Impossible d’afficher cette personne');
         return;
       }
@@ -86,8 +104,8 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
     };
 
   return (
-    <nav className="bottom-nav row" aria-label="Navigation principale">
-      <button type="button" className="bottom-nav-item active" onClick={onHome} aria-current="page">
+    <nav className="bottom-nav" aria-label="Navigation principale">
+      <button type="button" className="bottom-nav-item" onClick={onHome} aria-current="page">
         <div>
          {memberCount} 
         </div>
@@ -101,19 +119,21 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
         <svg {...iconProps}><path d="M12 15V3m-4 4 4-4 4 4" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>
         <span>Exporter</span>
       </button> */}
-      <button
-        type="button"
-        className="bottom-nav-item"
-        onClick={() => setSearchOpen((open) => !open)}
-        title="Rechercher une personne"
-        aria-label="Rechercher une personne"
-        aria-expanded={searchOpen}
-        aria-controls="tree-person-search"
-      >
-        <svg {...iconProps}><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
-      </button>
-      {searchOpen && (
-        <form id="tree-person-search" className="zoom-search" onSubmit={searchMember}>
+      <div className="bottom-nav-item" ref={searchAreaRef}>
+        <button
+          type="button"
+          className={`bottom-nav-item${searchOpen ? ' active' : ''}`}
+          onClick={() => setSearchOpen((open) => !open)}
+          title="Rechercher une personne"
+          aria-label="Rechercher une personne"
+          aria-expanded={searchOpen}
+          aria-controls="tree-person-search"
+        >
+          <svg {...iconProps}><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+          <span>Rechercher</span>
+        </button>
+        {searchOpen && (
+          <form id="tree-person-search" className="zoom-search" onSubmit={searchMember}>
           <label htmlFor="tree-person-search-input">Rechercher une personne</label>
           <div className="zoom-search-row">
             <input
@@ -148,8 +168,9 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
               ))}
             </ul>
           )}
-        </form>
-      )}
+          </form>
+        )}
+      </div>
     </nav>
   );
 }

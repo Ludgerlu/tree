@@ -12,7 +12,7 @@ interface Props {
   onReset: () => void;
   onFit: () => void;
   members: Member[];
-  onFocusMember: (id: string) => boolean;
+  onFocusMember: (id: string) => boolean | Promise<boolean>;
 }
 
 const icon = {

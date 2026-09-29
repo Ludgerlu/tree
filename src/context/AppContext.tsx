@@ -11,6 +11,22 @@ import { applyThemeVars } from '../services/themes';
 import { buildChildMap, computeAllGens, getAncestorIds } from '../services/treeLayout';
 
 const COLLAPSED_KEY = 'arbre.collapsed';
+const DEFAULT_VISIBLE_GENERATIONS = 2;
+const PREVIOUS_DEFAULT_VISIBLE_GENERATIONS = 3;
+
+function getDefaultCollapsedIds(members: Member[], visibleGenerations: number): Set<string> {
+  const generations = computeAllGens(members);
+  const children = buildChildMap(members);
+  return new Set(
+    members
+      .filter((member) => generations[member.id] === visibleGenerations - 1 && (children[member.id] || []).length > 0)
+      .map((member) => member.id)
+  );
+}
+
+function haveSameIds(first: Set<string>, second: Set<string>): boolean {
+  return first.size === second.size && Array.from(first).every((id) => second.has(id));
+}
 
 function loadCollapsed(): Set<string> {
   try {
@@ -89,15 +105,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const data = await api.load();
       const loadedMembers = data.members || [];
       setMembers(loadedMembers);
+      const defaultCollapsedIds = getDefaultCollapsedIds(loadedMembers, DEFAULT_VISIBLE_GENERATIONS);
       if (!hasSavedCollapseState.current) {
-        const generations = computeAllGens(loadedMembers);
-        const children = buildChildMap(loadedMembers);
-        setCollapsedIds(new Set(
-          loadedMembers
-            .filter((member) => generations[member.id] === 2 && (children[member.id] || []).length > 0)
-            .map((member) => member.id)
-        ));
+        setCollapsedIds(defaultCollapsedIds);
         hasSavedCollapseState.current = true;
+      } else if (haveSameIds(
+        loadCollapsed(),
+        getDefaultCollapsedIds(loadedMembers, PREVIOUS_DEFAULT_VISIBLE_GENERATIONS)
+      )) {
+        setCollapsedIds(defaultCollapsedIds);
       }
       setSettings((s) => mergeSettings(data.settings, s));
     } catch (e) {

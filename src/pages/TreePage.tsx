@@ -163,14 +163,17 @@ export default function TreePage() {
     [expandTo]
   );
 
-  const handleFocusMember = useCallback((id: string) => {
+  const handleFocusMember = useCallback(async (id: string) => {
+    if (!members.some((member) => member.id === id)) return false;
+    expandTo(id);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
     if (!focusMember(id)) return false;
     setHighlightedMemberId(id);
     window.setTimeout(() => {
       setHighlightedMemberId((currentId) => currentId === id ? null : currentId);
     }, 5000);
     return true;
-  }, [focusMember]);
+  }, [expandTo, focusMember, members]);
 
   const handleEditFromDetail = useCallback(
     (id: string) => {

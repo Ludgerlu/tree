@@ -9,7 +9,7 @@ export default function LegendBar({ memberCount }: Props) {
     <div id="legend-bar">
       {[0, 1, 2, 3, 4].map((g) => (
         <div className="legend-item" key={g}>
-          <span className="leg-swatch" data-gen={g}></span> G-{g + 1}
+          <span className="leg-swatch" data-gen={g}></span> G{g + 1}
         </div>
       ))}
       <div className="legend-sep"></div>
