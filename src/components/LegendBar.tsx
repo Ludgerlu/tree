@@ -19,9 +19,9 @@ export default function LegendBar({ memberCount }: Props) {
       <div className="legend-item">
         <span className="leg-gender f"></span> F
       </div>
-      <div className="legend-item" id="member-count">
+      {/* <div className="legend-item" id="member-count">
         {memberCount} membre{memberCount > 1 ? 's' : ''}
-      </div>
+      </div> */}
     </div>
   );
 }

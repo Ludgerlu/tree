@@ -15,9 +15,10 @@ interface Props {
   onImportFile: (members: Member[], settings: Settings | null) => Promise<void>;
   onExportJSON: () => void;
   onClearAll: () => Promise<void>;
+  isAuth: boolean; 
 }
 
-export default function SettingsModal({ open, settings, onClose, onSave, onImportFile, onExportJSON, onClearAll }: Props) {
+export default function SettingsModal({ open, settings, onClose, onSave, onImportFile, onExportJSON, onClearAll, isAuth }: Props) {
   const [treeName, setTreeName] = useState(settings.treeName);
   const [orientation, setOrientation] = useState<Orientation>(settings.orientation);
   const [theme, setTheme] = useState(settings.theme);
@@ -76,40 +77,46 @@ export default function SettingsModal({ open, settings, onClose, onSave, onImpor
         <button className="modal-close" onClick={onClose}>✕</button>
       </div>
       <div className="modal-body">
-        <div className="form-group">
-          <label>Nom de l'arbre</label>
-          <input type="text" value={treeName} onChange={(e) => setTreeName(e.target.value)} placeholder="Ma Famille" />
-        </div>
-        <div className="form-group">
+        {isAuth && (  
+          <div className="form-group">
+            <label>Nom de l'arbre</label>
+            <input type="text" value={treeName} onChange={(e) => setTreeName(e.target.value)} placeholder="Ma Famille" />
+          </div>
+        )}
+        {/* <div className="form-group">
           <label>Thème de couleur</label>
           <ThemePicker value={theme} onChange={setTheme} />
-        </div>
-        <div className="form-group">
-          <label>Orientation</label>
-          <div className="radio-group">
-            <label className="radio-label">
-              <input type="radio" checked={orientation === 'top'} onChange={() => setOrientation('top')} /> Haut → Bas
-            </label>
-            <label className="radio-label">
-              <input type="radio" checked={orientation === 'left'} onChange={() => setOrientation('left')} /> Gauche → Droite
-            </label>
-          </div>
-        </div>
-        <div className="form-group">
-          <label>Données</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
-              📥 Importer JSON
-            </button>
-            <button className="btn-ghost" onClick={onExportJSON}>
-              📤 Exporter JSON
-            </button>
-            <button className="btn-danger" onClick={handleClear}>
-              🗑 Tout effacer
-            </button>
-          </div>
-          <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
-        </div>
+        </div> */}
+        {isAuth && (
+          <>
+            <div className="form-group">
+              <label>Orientation</label>
+              <div className="radio-group">
+                <label className="radio-label">
+                  <input type="radio" checked={orientation === 'top'} onChange={() => setOrientation('top')} /> Haut → Bas
+                </label>
+                <label className="radio-label">
+                  <input type="radio" checked={orientation === 'left'} onChange={() => setOrientation('left')} /> Gauche → Droite
+                </label>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Données</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
+                  📥 Importer JSON
+                </button>
+                <button className="btn-ghost" onClick={onExportJSON}>
+                  📤 Exporter JSON
+                </button>
+                <button className="btn-danger" onClick={handleClear}>
+                  🗑 Tout effacer
+                </button>
+              </div>
+              <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
+            </div>
+          </>
+        )}
       </div>
       <div className="modal-footer">
         <button className="btn-primary" onClick={handleSave}>

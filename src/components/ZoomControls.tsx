@@ -38,60 +38,60 @@ export default function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, onFi
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
-  const searchMember = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    if (!normalizedQuery || searching) return;
+  // const searchMember = (event: FormEvent<HTMLFormElement>) => {
+  //   event.preventDefault();
+  //   const normalizedQuery = query.trim().toLocaleLowerCase();
+  //   if (!normalizedQuery || searching) return;
 
-    setSearching(true);
-    setSearchMessage('Recherche en cours…');
-    setSearchResults([]);
-    window.setTimeout(() => {
-      const exactMatches = members.filter((member) =>
-        `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase() === normalizedQuery
-      );
-      const matchingMembers = exactMatches.length ? exactMatches : members.filter((member) =>
-        `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase().includes(normalizedQuery)
-      );
+  //   setSearching(true);
+  //   setSearchMessage('Recherche en cours…');
+  //   setSearchResults([]);
+  //   window.setTimeout(() => {
+  //     const exactMatches = members.filter((member) =>
+  //       `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase() === normalizedQuery
+  //     );
+  //     const matchingMembers = exactMatches.length ? exactMatches : members.filter((member) =>
+  //       `${member.firstname} ${member.lastname}`.trim().toLocaleLowerCase().includes(normalizedQuery)
+  //     );
 
-      if (matchingMembers.length > 1) {
-        setSearchResults(matchingMembers);
-        setSearchMessage(`${matchingMembers.length} personnes trouvées. Choisissez la bonne personne.`);
-      } else if (matchingMembers.length === 1 && onFocusMember(matchingMembers[0].id)) {
-        setSearchMessage(`${matchingMembers[0].firstname} ${matchingMembers[0].lastname} trouvé`);
-      } else {
-        setSearchMessage('Aucune personne trouvée');
-      }
-      setSearching(false);
-    }, 300);
-  };
+  //     if (matchingMembers.length > 1) {
+  //       setSearchResults(matchingMembers);
+  //       setSearchMessage(`${matchingMembers.length} personnes trouvées. Choisissez la bonne personne.`);
+  //     } else if (matchingMembers.length === 1 && onFocusMember(matchingMembers[0].id)) {
+  //       setSearchMessage(`${matchingMembers[0].firstname} ${matchingMembers[0].lastname} trouvé`);
+  //     } else {
+  //       setSearchMessage('Aucune personne trouvée');
+  //     }
+  //     setSearching(false);
+  //   }, 300);
+  // };
 
-  const selectSearchResult = (member: Member) => {
-    if (!onFocusMember(member.id)) {
-      setSearchMessage('Impossible d’afficher cette personne');
-      return;
-    }
-    setSearchResults([]);
-    setSearchMessage(`${member.firstname} ${member.lastname} sélectionné`);
-  };
+  // const selectSearchResult = (member: Member) => {
+  //   if (!onFocusMember(member.id)) {
+  //     setSearchMessage('Impossible d’afficher cette personne');
+  //     return;
+  //   }
+  //   setSearchResults([]);
+  //   setSearchMessage(`${member.firstname} ${member.lastname} sélectionné`);
+  // };
 
-  const getMemberClues = (member: Member) => {
-    const clues = [
-      member.birth ? `Né(e) ${member.birth.slice(0, 4)}` : '',
-      member.death ? `Décès ${member.death.slice(0, 4)}` : '',
-      member.birthplace || '',
-      member.deathplace || '',
-    ].filter(Boolean);
-    const parent = members.find((candidate) => candidate.id === member.parentId);
-    const spouse = members.find((candidate) => candidate.id === member.spouseId);
-    if (parent) clues.push(`Parent : ${parent.firstname} ${parent.lastname}`);
-    if (spouse) clues.push(`Conjoint(e) : ${spouse.firstname} ${spouse.lastname}`);
-    return clues.join(' · ') || 'Aucun autre détail enregistré';
-  };
+  // const getMemberClues = (member: Member) => {
+  //   const clues = [
+  //     member.birth ? `Né(e) ${member.birth.slice(0, 4)}` : '',
+  //     member.death ? `Décès ${member.death.slice(0, 4)}` : '',
+  //     member.birthplace || '',
+  //     member.deathplace || '',
+  //   ].filter(Boolean);
+  //   const parent = members.find((candidate) => candidate.id === member.parentId);
+  //   const spouse = members.find((candidate) => candidate.id === member.spouseId);
+  //   if (parent) clues.push(`Parent : ${parent.firstname} ${parent.lastname}`);
+  //   if (spouse) clues.push(`Conjoint(e) : ${spouse.firstname} ${spouse.lastname}`);
+  //   return clues.join(' · ') || 'Aucun autre détail enregistré';
+  // };
 
   return (
     <div id="zoom-controls" aria-label="Contrôles de zoom">
-      <button
+      {/* <button
         type="button"
         className="zoom-btn"
         onClick={() => setSearchOpen((open) => !open)}
@@ -140,7 +140,7 @@ export default function ZoomControls({ scale, onZoomIn, onZoomOut, onReset, onFi
           )}
         </form>
       )}
-      <span className="zoom-divider"></span>
+      <span className="zoom-divider"></span> */}
       <button type="button" className="zoom-btn" onClick={onZoomIn} title="Zoom avant" aria-label="Zoom avant">
         <svg {...icon}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
       </button>

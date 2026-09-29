@@ -241,9 +241,9 @@ input, select, textarea { font-family: inherit; }
   bottom: 0;
   left: 50%;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  width: min(100%, 620px);
+  width: 100%;
   min-height: calc(68px + env(safe-area-inset-bottom, 0px));
   padding: 6px 10px max(6px, env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);

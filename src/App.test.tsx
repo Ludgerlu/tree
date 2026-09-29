@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import App from './App';
 
 beforeEach(() => {
+  window.localStorage.removeItem('arbre.collapsed');
   // L'application charge ses données depuis api.php au montage
   global.fetch = jest.fn(() =>
     Promise.resolve({
@@ -67,6 +68,49 @@ test('searches for a person and highlights their tree card', async () => {
   expect(container.querySelector('.zoom-search-status')).toHaveTextContent('Ada Lovelace trouvé');
   await waitFor(() => {
     expect(container.querySelector('[data-id="member-ada"]')).toHaveClass('search-highlight');
+  });
+});
+
+test('collapses descendants below generation three by default and allows expanding them', async () => {
+  const person = (id: string, parentId: string | null) => ({
+    id,
+    firstname: id,
+    lastname: 'Family',
+    gender: 'N',
+    birth: null,
+    birthplace: null,
+    death: null,
+    deathplace: null,
+    parentId,
+    spouseId: null,
+    notes: null,
+    photo: null,
+  });
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      json: () => Promise.resolve({
+        ok: true,
+        members: [
+          person('generation-1', null),
+          person('generation-2', 'generation-1'),
+          person('generation-3', 'generation-2'),
+          person('generation-4', 'generation-3'),
+        ],
+        settings: {},
+      }),
+    })
+  ) as jest.Mock;
+
+  const { container } = render(<App />);
+  await waitFor(() => {
+    expect(container.querySelector('[data-id="generation-3"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-id="generation-4"]')).not.toBeInTheDocument();
+  });
+
+  fireEvent.click(container.querySelectorAll('.collapse-btn')[2]);
+
+  await waitFor(() => {
+    expect(container.querySelector('[data-id="generation-4"]')).toBeInTheDocument();
   });
 });
 

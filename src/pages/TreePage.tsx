@@ -243,10 +243,13 @@ export default function TreePage() {
       </div>
 
       <BottomNav
+        memberCount={members.length}
         onHome={fitView}
         onAdd={() => requestAdd(null)}
         onExport={() => setExportOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        members={members}
+        onFocusMember={handleFocusMember}
       />
 
       <MemberModal
@@ -281,6 +284,7 @@ export default function TreePage() {
         onImportFile={importData}
         onExportJSON={exportJSON}
         onClearAll={clearAll}
+        isAuth={isAuthenticated}
       />
 
       <ExportModal

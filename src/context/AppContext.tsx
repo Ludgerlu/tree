@@ -8,7 +8,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Member, Settings } from '../types';
 import { api } from '../services/api';
 import { applyThemeVars } from '../services/themes';
-import { getAncestorIds } from '../services/treeLayout';
+import { buildChildMap, computeAllGens, getAncestorIds } from '../services/treeLayout';
 
 const COLLAPSED_KEY = 'arbre.collapsed';
 
@@ -22,7 +22,7 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-const DEFAULT_SETTINGS: Settings = { treeName: 'Ma Famille', theme: 0, orientation: 'top' };
+const DEFAULT_SETTINGS: Settings = { treeName: 'Wandji', theme: 0, orientation: 'top' };
 
 interface ToastState {
   message: string;
@@ -57,6 +57,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(loadCollapsed);
+  const hasSavedCollapseState = useRef(window.localStorage.getItem(COLLAPSED_KEY) !== null);
 
   const [toastMsg, setToastMsg] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -86,7 +87,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const data = await api.load();
-      setMembers(data.members || []);
+      const loadedMembers = data.members || [];
+      setMembers(loadedMembers);
+      if (!hasSavedCollapseState.current) {
+        const generations = computeAllGens(loadedMembers);
+        const children = buildChildMap(loadedMembers);
+        setCollapsedIds(new Set(
+          loadedMembers
+            .filter((member) => generations[member.id] === 2 && (children[member.id] || []).length > 0)
+            .map((member) => member.id)
+        ));
+        hasSavedCollapseState.current = true;
+      }
       setSettings((s) => mergeSettings(data.settings, s));
     } catch (e) {
       // Si l'API est inaccessible, on démarre avec un tableau vide (comme l'ancien comportement)
@@ -214,12 +226,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [handleError, showToast]);
 
   useEffect(() => {
+    if (loading) return;
     try {
       window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Array.from(collapsedIds)));
     } catch {
       /* stockage indisponible : le repli reste valable pour la session */
     }
-  }, [collapsedIds]);
+  }, [collapsedIds, loading]);
 
   const toggleCollapse = useCallback((id: string) => {
     setCollapsedIds((prev) => {
