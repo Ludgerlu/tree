@@ -30,7 +30,9 @@ test('closes the bottom navigation search when clicking outside it', () => {
   const searchButton = screen.getByRole('button', { name: 'Rechercher une personne' });
 
   fireEvent.click(searchButton);
-  expect(screen.getByRole('searchbox', { name: 'Rechercher une personne' })).toBeInTheDocument();
+  const searchInput = screen.getByRole('searchbox', { name: 'Rechercher une personne' });
+  expect(searchInput).toBeInTheDocument();
+  expect(searchInput).not.toHaveFocus();
 
   fireEvent.pointerDown(document.body);
 

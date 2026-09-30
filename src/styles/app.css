@@ -268,6 +268,7 @@ input, select, textarea { font-family: inherit; }
   font-size: 11px;
   font-weight: var(--font-medium);
   line-height: 1.2;
+  touch-action: manipulation;
   transition: background .16s ease, color .16s ease, transform .16s ease;
 }
 .bottom-nav-item:hover { background: var(--bg-page); color: var(--text-primary); }
@@ -330,6 +331,7 @@ input, select, textarea { font-family: inherit; }
   overflow: auto;
   cursor: grab;
   user-select: none;
+  touch-action: none;
 }
 #canvas-inner:active { cursor: grabbing; }
 #tree-svg {
@@ -851,7 +853,7 @@ input, select, textarea { font-family: inherit; }
 #zoom-controls {
   position: fixed;
   right: 18px;
-  bottom: 10%;
+  bottom: 12%;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -908,13 +910,14 @@ input, select, textarea { font-family: inherit; }
 .zoom-search-row input {
   flex: 1;
   min-width: 0;
-  height: 36px;
+  height: 40px;
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--bg-page);
   color: var(--text-primary);
-  font-size: var(--text-sm);
+  font-size: 20px;
+  /* touch-action: manipulation; */
 }
 .zoom-search-row input:focus { outline: 2px solid var(--accent-mid); outline-offset: 1px; }
 .zoom-search-row button {

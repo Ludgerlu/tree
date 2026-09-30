@@ -8,6 +8,8 @@ export function usePanZoom() {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [scale, setScale] = useState(1);
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
 
   useEffect(() => {
     const inner = containerRef.current;
@@ -18,6 +20,44 @@ export function usePanZoom() {
     let startY = 0;
     let startSL = 0;
     let startST = 0;
+    let touchStartDistance = 0;
+    let touchStartScale = 1;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartScrollLeft = 0;
+    let touchStartScrollTop = 0;
+
+    const distanceBetweenTouches = (touches: TouchList) => {
+      const deltaX = touches[0].clientX - touches[1].clientX;
+      const deltaY = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(deltaX, deltaY);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        touchStartDistance = distanceBetweenTouches(e.touches);
+        touchStartScale = scaleRef.current;
+      } else if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartScrollLeft = inner.scrollLeft;
+        touchStartScrollTop = inner.scrollTop;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        const distance = distanceBetweenTouches(e.touches);
+        if (touchStartDistance > 0) {
+          setScale(Math.max(0.3, Math.min(3, touchStartScale * distance / touchStartDistance)));
+        }
+      } else if (e.touches.length === 1) {
+        e.preventDefault();
+        inner.scrollLeft = touchStartScrollLeft - (e.touches[0].clientX - touchStartX);
+        inner.scrollTop = touchStartScrollTop - (e.touches[0].clientY - touchStartY);
+      }
+    };
 
     const onMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest('.node-group')) return;
@@ -47,12 +87,16 @@ export function usePanZoom() {
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     inner.addEventListener('wheel', onWheel, { passive: false });
+    inner.addEventListener('touchstart', onTouchStart, { passive: true });
+    inner.addEventListener('touchmove', onTouchMove, { passive: false });
 
     return () => {
       inner.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       inner.removeEventListener('wheel', onWheel);
+      inner.removeEventListener('touchstart', onTouchStart);
+      inner.removeEventListener('touchmove', onTouchMove);
     };
   }, []);
 

@@ -30,10 +30,6 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
     const [searchMessage, setSearchMessage] = useState('');
     const [searchResults, setSearchResults] = useState<Member[]>([]);
     const searchAreaRef = useRef<HTMLDivElement>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-      if (searchOpen) searchInputRef.current?.focus();
-    }, [searchOpen]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -137,7 +133,6 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
           <label htmlFor="tree-person-search-input">Rechercher une personne</label>
           <div className="zoom-search-row">
             <input
-              ref={searchInputRef}
               id="tree-person-search-input"
               type="search"
               value={query}
