@@ -26,6 +26,7 @@ export function usePanZoom() {
     let touchStartY = 0;
     let touchStartScrollLeft = 0;
     let touchStartScrollTop = 0;
+    let touchMode: 'pan' | 'pinch' | null = null;
 
     const distanceBetweenTouches = (touches: TouchList) => {
       const deltaX = touches[0].clientX - touches[1].clientX;
@@ -35,9 +36,11 @@ export function usePanZoom() {
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length >= 2) {
+        touchMode = 'pinch';
         touchStartDistance = distanceBetweenTouches(e.touches);
         touchStartScale = scaleRef.current;
       } else if (e.touches.length === 1) {
+        touchMode = 'pan';
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
         touchStartScrollLeft = inner.scrollLeft;
@@ -45,14 +48,28 @@ export function usePanZoom() {
       }
     };
 
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchMode = 'pan';
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartScrollLeft = inner.scrollLeft;
+        touchStartScrollTop = inner.scrollTop;
+        touchStartDistance = 0;
+      } else if (e.touches.length === 0) {
+        touchMode = null;
+        touchStartDistance = 0;
+      }
+    };
+
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length >= 2) {
+      if (touchMode === 'pinch' && e.touches.length >= 2) {
         e.preventDefault();
         const distance = distanceBetweenTouches(e.touches);
         if (touchStartDistance > 0) {
           setScale(Math.max(0.3, Math.min(3, touchStartScale * distance / touchStartDistance)));
         }
-      } else if (e.touches.length === 1) {
+      } else if (touchMode === 'pan' && e.touches.length === 1) {
         e.preventDefault();
         inner.scrollLeft = touchStartScrollLeft - (e.touches[0].clientX - touchStartX);
         inner.scrollTop = touchStartScrollTop - (e.touches[0].clientY - touchStartY);
@@ -88,6 +105,8 @@ export function usePanZoom() {
     window.addEventListener('mouseup', onMouseUp);
     inner.addEventListener('wheel', onWheel, { passive: false });
     inner.addEventListener('touchstart', onTouchStart, { passive: true });
+    inner.addEventListener('touchend', onTouchEnd, { passive: true });
+    inner.addEventListener('touchcancel', onTouchEnd, { passive: true });
     inner.addEventListener('touchmove', onTouchMove, { passive: false });
 
     return () => {
@@ -96,6 +115,8 @@ export function usePanZoom() {
       window.removeEventListener('mouseup', onMouseUp);
       inner.removeEventListener('wheel', onWheel);
       inner.removeEventListener('touchstart', onTouchStart);
+      inner.removeEventListener('touchend', onTouchEnd);
+      inner.removeEventListener('touchcancel', onTouchEnd);
       inner.removeEventListener('touchmove', onTouchMove);
     };
   }, []);

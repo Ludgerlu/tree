@@ -38,7 +38,7 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-const DEFAULT_SETTINGS: Settings = { treeName: 'Wandji', theme: 0, orientation: 'top' };
+const DEFAULT_SETTINGS: Settings = { treeName: 'Wandji', theme: 0, orientation: 'top', visibleGenerations: DEFAULT_VISIBLE_GENERATIONS };
 
 interface ToastState {
   message: string;
@@ -97,6 +97,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const mergeSettings = useCallback((incoming: Partial<Settings> | undefined, base: Settings): Settings => {
     const merged = { ...base, ...(incoming || {}) } as Settings;
     merged.theme = Number(merged.theme) || 0;
+    merged.visibleGenerations = Math.max(1, Math.min(5, Math.round(Number(merged.visibleGenerations) || DEFAULT_VISIBLE_GENERATIONS)));
     return merged;
   }, []);
 
@@ -104,8 +105,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await api.load();
       const loadedMembers = data.members || [];
+      const loadedSettings = mergeSettings(data.settings, DEFAULT_SETTINGS);
       setMembers(loadedMembers);
-      const defaultCollapsedIds = getDefaultCollapsedIds(loadedMembers, DEFAULT_VISIBLE_GENERATIONS);
+      const defaultCollapsedIds = getDefaultCollapsedIds(loadedMembers, loadedSettings.visibleGenerations);
       if (!hasSavedCollapseState.current) {
         setCollapsedIds(defaultCollapsedIds);
         hasSavedCollapseState.current = true;
@@ -115,7 +117,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       )) {
         setCollapsedIds(defaultCollapsedIds);
       }
-      setSettings((s) => mergeSettings(data.settings, s));
+      setSettings(loadedSettings);
     } catch (e) {
       // Si l'API est inaccessible, on démarre avec un tableau vide (comme l'ancien comportement)
       setMembers([]);
@@ -204,14 +206,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const saveSettings = useCallback(
     async (s: Settings) => {
-      setSettings(s);
+      const normalized = mergeSettings(s, DEFAULT_SETTINGS);
+      setSettings(normalized);
+      if (settings.visibleGenerations !== normalized.visibleGenerations) {
+        setCollapsedIds(getDefaultCollapsedIds(members, normalized.visibleGenerations));
+      }
       try {
-        await api.saveSettings(s);
+        await api.saveSettings(normalized);
       } catch (e) {
         handleError(e);
       }
     },
-    [handleError]
+    [handleError, members, mergeSettings, settings.visibleGenerations]
   );
 
   const importData = useCallback(
@@ -219,21 +225,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await api.importData(newMembers, newSettings);
         const fresh = await api.load();
-        setMembers(fresh.members || []);
-        setSettings((s) => mergeSettings(fresh.settings, s));
+        const importedMembers = fresh.members || [];
+        const importedSettings = mergeSettings(fresh.settings, settings);
+        setMembers(importedMembers);
+        setSettings(importedSettings);
+        setCollapsedIds(getDefaultCollapsedIds(importedMembers, importedSettings.visibleGenerations));
         showToast(res.message || 'Données importées');
       } catch (e) {
         handleError(e);
         throw e;
       }
     },
-    [handleError, mergeSettings, showToast]
+    [handleError, mergeSettings, settings, showToast]
   );
 
   const clearAll = useCallback(async () => {
     try {
       await api.clearAll();
       setMembers([]);
+      setCollapsedIds(new Set());
       showToast('Arbre effacé');
     } catch (e) {
       handleError(e);

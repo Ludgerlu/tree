@@ -21,6 +21,7 @@ export interface Settings {
   treeName: string;
   theme: number;
   orientation: Orientation;
+  visibleGenerations: number;
 }
 
 export interface Position {

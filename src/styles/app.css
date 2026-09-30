@@ -428,6 +428,7 @@ input, select, textarea { font-family: inherit; }
   box-shadow: var(--shadow-lg);
   animation: modal-in .22s var(--ease);
 }
+.member-form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(18px) scale(.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -472,6 +473,9 @@ input, select, textarea { font-family: inherit; }
 .form-row { display: flex; gap: 14px; }
 .form-row.two-col > * { flex: 1; }
 .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
+.field-error { color: var(--danger); font-size: var(--text-xs); }
+.form-error { padding: 10px 12px; border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); background: rgba(180, 55, 45, .06); font-size: var(--text-sm); }
+.form-group input[aria-invalid="true"] { border-color: var(--danger); }
 .form-group label {
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
@@ -492,6 +496,34 @@ input, select, textarea { font-family: inherit; }
   transition: border-color .15s, box-shadow .15s;
   resize: vertical;
 }
+.member-select__control {
+  min-height: 40px !important;
+  border-color: var(--border) !important;
+  border-radius: 8px !important;
+  background: var(--bg-page) !important;
+  box-shadow: none !important;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+.member-select__control:hover { border-color: var(--accent-mid) !important; }
+.member-select__control--is-focused {
+  border-color: var(--accent-mid) !important;
+  box-shadow: 0 0 0 3px rgba(45, 90, 61, .12) !important;
+}
+.member-select__menu {
+  z-index: 300;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px !important;
+  background: var(--bg-card) !important;
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+.member-select__option--is-focused { background: var(--accent-bg) !important; }
+.member-select__option--is-selected { background: var(--accent) !important; }
+.member-select__input-container { color: var(--text-primary) !important; }
+.member-select__placeholder { color: var(--text-muted) !important; }
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
@@ -878,6 +910,7 @@ input, select, textarea { font-family: inherit; }
 }
 .zoom-btn:hover { background: var(--accent-bg); color: var(--accent-dark); }
 .zoom-btn:active { transform: scale(.94); }
+.zoom-btn, .zoom-level-btn { touch-action: manipulation; }
 .zoom-level-btn {
   min-width: 52px;
   height: 34px;
@@ -970,7 +1003,11 @@ input, select, textarea { font-family: inherit; }
 }
 
 @media (max-width: 640px) {
-  #zoom-controls { right: 12px; padding: 4px; }
+  #zoom-controls {
+    right: 12px;
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    padding: 4px;
+  }
   .zoom-btn { width: 30px; height: 30px; }
   .zoom-level-btn { min-width: 44px; height: 30px; font-size: 0.72rem; }
 }

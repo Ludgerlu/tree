@@ -240,8 +240,6 @@ export default function TreePage() {
           onZoomOut={zoomOut}
           onReset={resetZoom}
           onFit={fitView}
-          members={members}
-          onFocusMember={handleFocusMember}
         />
       </div>
 

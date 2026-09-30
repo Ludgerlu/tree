@@ -5,7 +5,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Member, Orientation, Settings } from '../types';
 import Modal from './Modal';
-import ThemePicker from './ThemePicker';
 
 interface Props {
   open: boolean;
@@ -21,19 +20,24 @@ interface Props {
 export default function SettingsModal({ open, settings, onClose, onSave, onImportFile, onExportJSON, onClearAll, isAuth }: Props) {
   const [treeName, setTreeName] = useState(settings.treeName);
   const [orientation, setOrientation] = useState<Orientation>(settings.orientation);
-  const [theme, setTheme] = useState(settings.theme);
+  const [visibleGenerations, setVisibleGenerations] = useState(settings.visibleGenerations);
+  const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false);
+  const [clearConfirmationText, setClearConfirmationText] = useState('');
+  const [clearing, setClearing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setTreeName(settings.treeName);
       setOrientation(settings.orientation);
-      setTheme(settings.theme);
+      setVisibleGenerations(settings.visibleGenerations);
+      setClearConfirmationOpen(false);
+      setClearConfirmationText('');
     }
   }, [open, settings]);
 
   const handleSave = () => {
-    onSave({ treeName: treeName.trim() || 'Ma Famille', orientation, theme });
+    onSave({ treeName: treeName.trim() || 'Ma Famille', orientation, theme: settings.theme, visibleGenerations });
     onClose();
   };
 
@@ -61,12 +65,15 @@ export default function SettingsModal({ open, settings, onClose, onSave, onImpor
   };
 
   const handleClear = async () => {
-    if (!window.confirm('Effacer tous les membres ? Cette action est irréversible.')) return;
+    if (clearConfirmationText.trim().toLocaleUpperCase() !== 'EFFACER' || clearing) return;
+    setClearing(true);
     try {
       await onClearAll();
       onClose();
     } catch {
       // toast déjà affiché
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -83,10 +90,6 @@ export default function SettingsModal({ open, settings, onClose, onSave, onImpor
             <input type="text" value={treeName} onChange={(e) => setTreeName(e.target.value)} placeholder="Ma Famille" />
           </div>
         )}
-        {/* <div className="form-group">
-          <label>Thème de couleur</label>
-          <ThemePicker value={theme} onChange={setTheme} />
-        </div> */}
         {isAuth && (
           <>
             <div className="form-group">
@@ -101,25 +104,62 @@ export default function SettingsModal({ open, settings, onClose, onSave, onImpor
               </div>
             </div>
             <div className="form-group">
+              <label htmlFor="visible-generations">Générations visibles au départ</label>
+              <select
+                id="visible-generations"
+                value={visibleGenerations}
+                onChange={(event) => setVisibleGenerations(Number(event.target.value))}
+              >
+                {[1, 2, 3, 4, 5].map((count) => (
+                  <option key={count} value={count}>{count} génération{count > 1 ? 's' : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
               <label>Données</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
+                <button type="button" className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
                   📥 Importer JSON
                 </button>
-                <button className="btn-ghost" onClick={onExportJSON}>
-                  📤 Exporter JSON
+                <button type="button" className="btn-ghost" onClick={onExportJSON}>
+                  📦 Sauvegarder les données (JSON)
                 </button>
-                <button className="btn-danger" onClick={handleClear}>
-                  🗑 Tout effacer
+                <button type="button" className="btn-danger" onClick={() => setClearConfirmationOpen(true)}>
+                  Tout effacer…
                 </button>
               </div>
+              <p className="data-backup-note">Le fichier JSON inclut les membres et paramètres et peut être réimporté pour restaurer l’arbre.</p>
               <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleFileChange} />
             </div>
           </>
         )}
+        {isAuth && clearConfirmationOpen && (
+          <div className="clear-confirmation" role="alertdialog" aria-labelledby="clear-confirmation-title" aria-describedby="clear-confirmation-description">
+            <h3 id="clear-confirmation-title">Effacer définitivement l’arbre ?</h3>
+            <p id="clear-confirmation-description">Cette action supprimera tous les membres et photos. Créez une sauvegarde JSON avant de continuer. Pour confirmer, saisissez EFFACER.</p>
+            <label htmlFor="clear-confirmation-input">Saisissez EFFACER pour confirmer</label>
+            <input
+              id="clear-confirmation-input"
+              value={clearConfirmationText}
+              onChange={(event) => setClearConfirmationText(event.target.value)}
+              autoComplete="off"
+            />
+            <div className="clear-confirmation-actions">
+              <button type="button" className="btn-ghost" onClick={() => setClearConfirmationOpen(false)}>Annuler</button>
+              <button
+                type="button"
+                className="btn-danger"
+                disabled={clearConfirmationText.trim().toLocaleUpperCase() !== 'EFFACER' || clearing}
+                onClick={handleClear}
+              >
+                {clearing ? 'Suppression…' : 'Confirmer la suppression'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <div className="modal-footer">
-        <button className="btn-primary" onClick={handleSave}>
+        <button type="button" className="btn-primary" onClick={handleSave}>
           Enregistrer
         </button>
       </div>

@@ -587,7 +587,7 @@ switch ($action) {
 
     case 'save_settings':
         $s       = $body['settings'] ?? $body;
-        $allowed = ['treeName', 'theme', 'orientation'];
+        $allowed = ['treeName', 'theme', 'orientation', 'visibleGenerations'];
         foreach ($allowed as $key) {
             if (isset($s[$key])) {
                 $pdo->prepare("INSERT OR REPLACE INTO parametres (cle, valeur) VALUES (?, ?)")
@@ -651,7 +651,7 @@ switch ($action) {
                 ]);
             }
             if ($s) {
-                foreach (['treeName','theme','orientation'] as $key) {
+                foreach (['treeName','theme','orientation','visibleGenerations'] as $key) {
                     if (isset($s[$key])) {
                         $pdo->prepare("INSERT OR REPLACE INTO parametres (cle,valeur) VALUES (?,?)")
                             ->execute([$key, (string)$s[$key]]);
