@@ -121,7 +121,7 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
 
   return (
     <Modal open={open} onClose={onClose}>
-      <form className="member-form" onSubmit={handleSave} noValidate>
+      <form className="member-form d-flex flex-column" onSubmit={handleSave} noValidate>
         <div className="modal-header">
           <h2 className="modal-title">{isEditing ? 'Modifier le membre' : 'Nouveau membre'}</h2>
           <button type="button" className="modal-close" onClick={onClose}>✕</button>
@@ -129,8 +129,9 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
         <div className="modal-body">
           <PhotoUpload photo={form.photo} firstname={form.firstname} onChange={(p) => updateField('photo', p)} />
 
-          <div className="form-row two-col">
-            <div className="form-group">
+          <div className="row g-3">
+            <div className="col-12 col-sm-6">
+              <div className="form-group">
               <label htmlFor="member-firstname">
                 Prénom <span className="req">*</span>
               </label>
@@ -145,8 +146,10 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
                 onChange={(e) => updateField('firstname', e.target.value)}
               />
               {fieldErrors.firstname && <p id="member-firstname-error" className="field-error">{fieldErrors.firstname}</p>}
+              </div>
             </div>
-            <div className="form-group">
+            <div className="col-12 col-sm-6">
+              <div className="form-group">
               <label htmlFor="member-lastname">
                 Nom de famille <span className="req">*</span>
               </label>
@@ -161,12 +164,13 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
                 onChange={(e) => updateField('lastname', e.target.value)}
               />
               {fieldErrors.lastname && <p id="member-lastname-error" className="field-error">{fieldErrors.lastname}</p>}
+              </div>
             </div>
           </div>
 
           <div className="form-group">
             <label>Genre</label>
-            <div className="radio-group">
+            <div className="d-flex flex-wrap gap-3 mt-1">
               <label className="radio-label">
                 <input type="radio" checked={form.gender === 'M'} onChange={() => updateField('gender', 'M' as Gender)} /> Homme
               </label>
@@ -179,23 +183,30 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
             </div>
           </div>
 
-          <div className="form-row two-col">
-            <div className="form-group">
+          <div className="row g-3">
+            <div className="col-12 col-sm-6">
+              <div className="form-group">
               <label htmlFor="member-birth">Date de naissance</label>
               <input id="member-birth" type="date" value={form.birth || ''} onChange={(e) => updateField('birth', e.target.value || null)} />
+              </div>
             </div>
-            <div className="form-group">
+            <div className="col-12 col-sm-6">
+              <div className="form-group">
               <label htmlFor="member-birthplace">Lieu de naissance</label>
               <input id="member-birthplace" type="text" value={form.birthplace || ''} placeholder="ex : Paris, France" onChange={(e) => updateField('birthplace', e.target.value || null)} />
+              </div>
             </div>
           </div>
 
-          <div className="form-row two-col">
-            <div className="form-group">
+          <div className="row g-3">
+            <div className="col-12 col-sm-6">
+              <div className="form-group">
               <label htmlFor="member-death">Date de décès</label>
               <input id="member-death" type="date" value={form.death || ''} onChange={(e) => updateField('death', e.target.value || null)} />
+              </div>
             </div>
-            <div className="form-group">
+            <div className="col-12 col-sm-6">
+              <div className="form-group">
               <label htmlFor="member-deathplace">Lieu de décès</label>
               <input
                 id="member-deathplace"
@@ -204,6 +215,7 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
                 placeholder="Laisser vide si vivant(e)"
                 onChange={(e) => updateField('deathplace', e.target.value || null)}
               />
+              </div>
             </div>
           </div>
 
@@ -263,7 +275,7 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
               Supprimer
             </button>
           )}
-          <div style={{ flex: 1 }} />
+          <div className="ms-auto flex-grow-1" />
           <button type="button" className="btn-ghost" onClick={onClose}>
             Annuler
           </button>

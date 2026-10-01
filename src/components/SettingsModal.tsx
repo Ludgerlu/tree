@@ -116,16 +116,16 @@ export default function SettingsModal({ open, settings, onClose, onSave, onImpor
               </select>
             </div>
             <div className="form-group">
-              <label>Données</label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
-                  📥 Importer JSON
+              <label>Données (JSON)</label>
+              <div className="row gap-1">
+                <button type="button" className="btn-ghost col-4" onClick={() => fileInputRef.current?.click()}>
+                  📥 Importer
                 </button>
-                <button type="button" className="btn-ghost" onClick={onExportJSON}>
-                  📦 Sauvegarder les données (JSON)
+                <button type="button" className="btn-ghost col-4" onClick={onExportJSON}>
+                  📦 Sauvegarder
                 </button>
-                <button type="button" className="btn-danger" onClick={() => setClearConfirmationOpen(true)}>
-                  Tout effacer…
+                <button type="button" className="btn-danger col-4" onClick={() => setClearConfirmationOpen(true)}>
+                  Tout effacer
                 </button>
               </div>
               <p className="data-backup-note">Le fichier JSON inclut les membres et paramètres et peut être réimporté pour restaurer l’arbre.</p>
