@@ -94,25 +94,39 @@ export default function DetailModal({ open, member, members, genMemo, theme, isA
   };
 
   return (
-    <Modal open={open} onClose={onClose} className="detail-box" overlayClassName="detail-overlay">
+    <Modal open={open} onClose={onClose} className="detail-box profile-detail-box" overlayClassName="detail-overlay">
       <div className="modal-header">
-        <h2 className="modal-title">
-          {member.firstname} {member.lastname}
-        </h2>
-        <button className="modal-close" onClick={onClose}>✕</button>
-      </div>
-      <div className="modal-body">
-        <div className="detail-hero">
-          <div className="detail-avatar" data-gen={g}>
-            {hasPhoto ? <img src={member.photo!} alt={member.firstname} /> : initials(member).toUpperCase()}
-          </div>
-          <div className="detail-info">
-            <p className="detail-meta">{dates.join('  ·  ')}</p>
-            <p className="detail-meta">{places.join('  ·  ')}</p>
-            <p className="detail-gen-badge">Génération {g + 1}</p>
-          </div>
+        <div>
+          {/* <p className="member-modal-eyebrow">PROFIL FAMILIAL</p> */}
+          <p className="detail-header-caption">Fiche du membre</p>
         </div>
-        {member.notes && <div className="detail-notes">{member.notes}</div>}
+        <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer le profil">✕</button>
+      </div>
+      <div className="modal-body detail-modal-body">
+        <section className="detail-profile-card" aria-label={`Profil de ${member.firstname} ${member.lastname}`}>
+          <div className="detail-cover">
+              <div className="detail-cover-placeholder" aria-hidden="true">{initials(member).toUpperCase()}</div>
+          </div>
+          <div className="detail-profile-content">
+            <div className="detail-avatar" data-gen={g}>
+              {hasPhoto ? <img src={member.photo!} alt={member.firstname} /> : initials(member).toUpperCase()}
+            </div>
+            <div className="detail-info">
+              <h2 className="detail-member-name">{member.firstname} {member.lastname}</h2>
+              <p className="detail-gen-badge">Génération {g + 1}</p>
+            </div>
+            <div className="detail-facts">
+              {dates.length > 0 && <p className="detail-meta">{dates.join('  ·  ')}</p>}
+              {places.length > 0 && <p className="detail-meta">{places.join('  ·  ')}</p>}
+            </div>
+          </div>
+        </section>
+        {member.notes && (
+          <section className="detail-notes-section">
+            <h3>À propos</h3>
+            <p className="detail-notes">{member.notes}</p>
+          </section>
+        )}
         <div className="detail-family">
           {renderSection('Conjoint(e)', spouseItems)}
           {renderSection('Parents', parentItems)}

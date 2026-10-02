@@ -15,13 +15,13 @@ import {
   getVisibleMembers,
   initials,
   layoutTree,
+  NH,
+  NW,
+  NRX,
+  PHOTO_R,
   truncate,
 } from '../services/treeLayout';
 
-const NW = 158;
-const NH = 80;
-const NRX = 12;
-const PHOTO_R = 22;
 const BLUR_ID = 'tree-blur';
 
 interface Props {
@@ -92,17 +92,31 @@ export default function TreeCanvas({
 
     if (m.parentId && positions[m.parentId]) {
       const pp = positions[m.parentId];
-      const x1 = pp.x + NW / 2;
-      const y1 = pp.y + NH;
+      let x1 = pp.x + NW / 2;
+      let y1 = pp.y + NH;
+      const parent = members.find((candidate) => candidate.id === m.parentId);
+      const parentSpouse = parent?.spouseId ? members.find((candidate) => candidate.id === parent.spouseId) : undefined;
+      if (parentSpouse && positions[parentSpouse.id] && genMemo[parentSpouse.id] === genMemo[m.parentId]) {
+        const spousePosition = positions[parentSpouse.id];
+        if (settings.orientation === 'top') {
+          x1 = (pp.x + spousePosition.x + NW) / 2;
+          y1 = Math.max(pp.y, spousePosition.y) + NH;
+        } else {
+          x1 = Math.max(pp.x, spousePosition.x) + NW;
+          y1 = (pp.y + spousePosition.y + NH) / 2;
+        }
+      }
       const x2 = pos.x + NW / 2;
       const y2 = pos.y;
-      const my = (y1 + y2) / 2;
       const col = genColor(theme, genMemo[m.id] - 1);
       const isDim = !!focus && !focus.links.has(`${m.parentId}>${m.id}`);
+      const connectorPath = settings.orientation === 'top'
+        ? `M${x1},${y1} C${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}`
+        : `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
       (isDim ? connectorsDim : connectorsClear).push(
         <path
           key={`c-${m.id}`}
-          d={`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`}
+          d={connectorPath}
           fill="none"
           stroke={col}
           strokeWidth={1.8}
@@ -115,13 +129,23 @@ export default function TreeCanvas({
     if (m.spouseId && positions[m.spouseId] && m.id < m.spouseId) {
       const sp = positions[m.spouseId];
       const isDim = !!focus && !(focus.nodes.has(m.id) && focus.nodes.has(m.spouseId));
+      const spouseLine = settings.orientation === 'top'
+        ? {
+            x1: Math.min(pos.x, sp.x) + NW,
+            y1: pos.y + NH / 2,
+            x2: Math.max(pos.x, sp.x),
+            y2: sp.y + NH / 2,
+          }
+        : {
+            x1: pos.x + NW / 2,
+            y1: Math.min(pos.y, sp.y) + NH,
+            x2: sp.x + NW / 2,
+            y2: Math.max(pos.y, sp.y),
+          };
       (isDim ? connectorsDim : connectorsClear).push(
         <line
           key={`s-${m.id}`}
-          x1={pos.x + NW}
-          y1={pos.y + NH / 2}
-          x2={sp.x}
-          y2={sp.y + NH / 2}
+          {...spouseLine}
           stroke="#a89880"
           strokeWidth={1.5}
           strokeDasharray="5,4"
@@ -136,17 +160,17 @@ export default function TreeCanvas({
   visible.forEach((m) => {
     const pos = positions[m.id];
     if (!pos) return;
-    const g = genMemo[m.id] ?? 0;
-    const col = genColor(theme, g);
-    const colL = genColor(theme, g, true);
-    const ini = initials(m).toUpperCase();
-    const photoId = `photo-clip-${m.id}`;
-    const hasPhoto = !!(m.photo && m.photo.length > 5);
-    const cx = pos.x + PHOTO_R + 12;
-    const cy = pos.y + NH / 2;
-    const textX = pos.x + PHOTO_R * 2 + 20;
-    const isDim = !!focus && !focus.nodes.has(m.id);
-    const layer = layerFor(isDim);
+    const g = genMemo[m.id] ?? 0;                                     // Génération (0 à 4)
+    const col = genColor(theme, g);                                   // Couleur de la génération
+    const colL = genColor(theme, g, true);                            // Couleur claire de la génération
+    const ini = initials(m).toUpperCase();                            // Initiales du membre
+    const photoId = `photo-clip-${m.id}`;                             // ID du clipPath pour la photo
+    const hasPhoto = !!(m.photo && m.photo.length > 5);               // Le membre a une photo (URL non vide)
+    const cx = pos.x + PHOTO_R + 12;                                  // Décalage horizontal pour laisser de la place au texte
+    const cy = pos.y + NH / 2;                                        // Décalage vertical pour centrer le cercle de la photo
+    const textX = pos.x + PHOTO_R * 2 + 20;                           // Décalage horizontal pour le texte (à droite du cercle de la photo)
+    const isDim = !!focus && !focus.nodes.has(m.id);                  // Le nœud est-il hors du chemin du membre sélectionné ?
+    const layer = layerFor(isDim);                                    // Choix de la couche (floutée ou nette) selon le focus
 
     clipPaths.push(
       <clipPath id={photoId} key={`clip-${m.id}`}>
@@ -187,7 +211,7 @@ export default function TreeCanvas({
             dominantBaseline="middle"
             fill={col}
             fontFamily="'Cormorant Garamond', Georgia, serif"
-            fontSize={13}
+            fontSize={20}
             fontWeight={600}
             className="node-initials"
           >
@@ -199,8 +223,8 @@ export default function TreeCanvas({
           y={pos.y + NH / 2 - 9}
           fill={col}
           fontFamily="'Cormorant Garamond', Georgia, serif"
-          fontSize={13.5}
-          fontWeight={600}
+          fontSize={25}
+          fontWeight={800}
           style={{ pointerEvents: 'none' }}
         >
           <tspan>{truncate(m.firstname, 12)}</tspan>
@@ -210,9 +234,9 @@ export default function TreeCanvas({
           y={pos.y + NH / 2 + 7}
           fill={col}
           fontFamily="'Cormorant Garamond', Georgia, serif"
-          fontSize={12}
-          fontWeight={400}
-          style={{ pointerEvents: 'none' }}
+          fontSize={15}
+          fontWeight={1200}
+          style={{ pointerEvents: 'none' , textTransform: 'uppercase' }}
         >
           <tspan>{truncate(m.lastname, 14)}</tspan>
         </text>
@@ -221,7 +245,7 @@ export default function TreeCanvas({
             x={textX}
             y={pos.y + NH / 2 + 22}
             fill={col}
-            opacity={0.65}
+            opacity={8}
             fontFamily="'Inter', system-ui, sans-serif"
             fontSize={10}
             style={{ pointerEvents: 'none' }}

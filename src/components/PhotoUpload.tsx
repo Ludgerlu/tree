@@ -44,10 +44,18 @@ export default function PhotoUpload({ photo, firstname, onChange }: Props) {
   };
 
   return (
-    <div className="form-group">
-      <label>Photo du membre</label>
-      <div className="photo-upload-area">
-        <div className="photo-preview-thumb" style={{ opacity: loading ? 0.45 : 1 }}>
+    <section className="member-photo-card" aria-label="Photo du membre">
+      <div className="member-photo-cover">
+        {hasPhoto ? (
+          <img className="member-photo-cover-image" src={photo!} alt="" />
+        ) : (
+          <div className="member-photo-cover-placeholder" aria-hidden="true">
+            <span>{firstname.trim() ? firstname.trim().charAt(0).toUpperCase() : '✦'}</span>
+          </div>
+        )}
+      </div>
+      <div className="member-photo-profile">
+        <div className="photo-preview-thumb member-photo-avatar" style={{ opacity: loading ? 0.45 : 1 }}>
           {hasPhoto ? (
             <img
               src={photo!}
@@ -65,6 +73,8 @@ export default function PhotoUpload({ photo, firstname, onChange }: Props) {
           )}
         </div>
         <div className="photo-upload-info">
+          <p className="member-photo-name">{firstname.trim() || 'Nouveau membre'}</p>
+          <p className="member-photo-caption">Portrait du profil familial</p>
           <div className="photo-actions">
             <button type="button" className="btn-photo-pick" onClick={() => fileInputRef.current?.click()}>
               Choisir une photo
@@ -111,15 +121,16 @@ export default function PhotoUpload({ photo, firstname, onChange }: Props) {
         style={{ display: 'none' }}
         onChange={handleFile}
       />
-      <div className="form-group" style={{ marginTop: 10 }}>
-        <label>URL photo (alternative)</label>
+      <div className="member-photo-url">
+        <label htmlFor="member-photo-url-input">Ou utiliser une URL de photo</label>
         <input
+          id="member-photo-url-input"
           type="url"
           placeholder="https://…"
           value={hasPhoto && !isDataUrl ? photo! : ''}
           onChange={(e) => onChange(e.target.value || null)}
         />
       </div>
-    </div>
+    </section>
   );
 }

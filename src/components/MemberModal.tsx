@@ -120,16 +120,21 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
   };
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} boxStyle={{ maxWidth: 700 }} className="member-edit-modal">
       <form className="member-form d-flex flex-column" onSubmit={handleSave} noValidate>
         <div className="modal-header">
-          <h2 className="modal-title">{isEditing ? 'Modifier le membre' : 'Nouveau membre'}</h2>
+          <div>
+            <p className="member-modal-eyebrow">DOSSIER FAMILIAL</p>
+            <h2 className="modal-title">{isEditing ? 'Modifier le profil' : 'Nouveau profil'}</h2>
+          </div>
           <button type="button" className="modal-close" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body member-modal-body">
           <PhotoUpload photo={form.photo} firstname={form.firstname} onChange={(p) => updateField('photo', p)} />
 
-          <div className="row g-3">
+          <section className="member-form-section">
+            <h3 className="member-section-title">Identité</h3>
+            <div className="row g-3">
             <div className="col-12 col-sm-6">
               <div className="form-group">
               <label htmlFor="member-firstname">
@@ -168,9 +173,9 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
             </div>
           </div>
 
-          <div className="form-group">
-            <label>Genre</label>
-            <div className="d-flex flex-wrap gap-3 mt-1">
+            <div className="form-group member-gender-group">
+              <label>Genre</label>
+              <div className="d-flex flex-wrap gap-3 mt-1">
               <label className="radio-label">
                 <input type="radio" checked={form.gender === 'M'} onChange={() => updateField('gender', 'M' as Gender)} /> Homme
               </label>
@@ -180,10 +185,13 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
               <label className="radio-label">
                 <input type="radio" checked={form.gender === 'N'} onChange={() => updateField('gender', 'N' as Gender)} /> Autre
               </label>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div className="row g-3">
+          <section className="member-form-section">
+            <h3 className="member-section-title">Dates et lieux</h3>
+            <div className="row g-3">
             <div className="col-12 col-sm-6">
               <div className="form-group">
               <label htmlFor="member-birth">Date de naissance</label>
@@ -198,7 +206,7 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
             </div>
           </div>
 
-          <div className="row g-3">
+            <div className="row g-3">
             <div className="col-12 col-sm-6">
               <div className="form-group">
               <label htmlFor="member-death">Date de décès</label>
@@ -218,10 +226,13 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
               </div>
             </div>
           </div>
+          </section>
 
-          <div className="form-group">
-            <label id="member-parent-label" htmlFor="member-parent-input">Parent (père ou mère)</label>
-            <Select<MemberOption, false>
+          <section className="member-form-section">
+            <h3 className="member-section-title">Liens familiaux</h3>
+            <div className="form-group">
+              <label id="member-parent-label" htmlFor="member-parent-input">Parent (père ou mère)</label>
+              <Select<MemberOption, false>
               inputId="member-parent-input"
               instanceId="member-parent-select"
               classNamePrefix="member-select"
@@ -235,12 +246,12 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
               noOptionsMessage={({ inputValue }) => inputValue ? 'Aucun membre trouvé' : 'Aucun membre disponible'}
               menuPortalTarget={document.body}
               styles={{ menuPortal: (base) => ({ ...base, zIndex: 300 }) }}
-            />
-          </div>
+              />
+            </div>
 
-          <div className="form-group">
-            <label id="member-spouse-label" htmlFor="member-spouse-input">Conjoint(e) (lien affiché)</label>
-            <Select<MemberOption, false>
+            <div className="form-group">
+              <label id="member-spouse-label" htmlFor="member-spouse-input">Conjoint(e) (lien affiché)</label>
+              <Select<MemberOption, false>
               inputId="member-spouse-input"
               instanceId="member-spouse-select"
               classNamePrefix="member-select"
@@ -254,19 +265,23 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
               noOptionsMessage={({ inputValue }) => inputValue ? 'Aucun membre trouvé' : 'Aucun membre disponible'}
               menuPortalTarget={document.body}
               styles={{ menuPortal: (base) => ({ ...base, zIndex: 300 }) }}
-            />
-          </div>
+              />
+            </div>
+          </section>
 
-          <div className="form-group">
-            <label htmlFor="member-notes">Notes / Biographie</label>
-            <textarea
+          <section className="member-form-section">
+            <h3 className="member-section-title">À propos</h3>
+            <div className="form-group">
+              <label htmlFor="member-notes">Notes / Biographie</label>
+              <textarea
               id="member-notes"
               rows={3}
               placeholder="Profession, anecdotes, lieu de vie…"
               value={form.notes || ''}
               onChange={(e) => updateField('notes', e.target.value || null)}
-            />
-          </div>
+              />
+            </div>
+          </section>
           {saveError && <p className="form-error" role="alert">{saveError}</p>}
         </div>
         <div className="modal-footer">
