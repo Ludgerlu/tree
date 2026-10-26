@@ -17,6 +17,12 @@ interface Props {
   onClose: () => void;
   onSave: (member: Member) => Promise<void>;
   onDelete: (id: string) => void;
+  isAuthenticated: boolean;
+  account: { displayName: string; username: string; role: string } | null;
+  onSaveProfile: (displayName: string) => Promise<void>;
+  treeName: string;
+  onEditMember: (id: string) => void;
+  onViewTree: () => void;
 }
 
 function uid(): string {
@@ -45,11 +51,18 @@ interface MemberOption {
   label: string;
 }
 
-export default function MemberModal({ open, editingMember, defaultParentId, members, onClose, onSave, onDelete }: Props) {
+export default function MemberModal({ open, editingMember, defaultParentId, members, onClose, onSave, onDelete, isAuthenticated, account, onSaveProfile, treeName, onEditMember, onViewTree }: Props) {
   const [form, setForm] = useState<Member>(() => editingMember ?? emptyForm(defaultParentId));
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ firstname?: string; lastname?: string }>({});
   const [saveError, setSaveError] = useState('');
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileName, setProfileName] = useState(account?.displayName ?? '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [activeTab, setActiveTab] = useState<'form' | 'members'>('form');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [familySlideIndex, setFamilySlideIndex] = useState(0);
   const savingRef = useRef(false);
 
   useEffect(() => {
@@ -57,7 +70,13 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
     setForm(editingMember ? { ...editingMember } : emptyForm(defaultParentId));
     setFieldErrors({});
     setSaveError('');
-  }, [open, editingMember, defaultParentId]);
+    setProfileName(account?.displayName ?? '');
+    setEditingProfile(false);
+    setProfileError('');
+    setActiveTab(isAuthenticated ? 'form' : 'members');
+    setMemberSearch('');
+    setFamilySlideIndex(0);
+  }, [open, editingMember, defaultParentId, account?.displayName, isAuthenticated]);
 
   const isEditing = !!editingMember;
 
@@ -71,6 +90,40 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
     value: member.id,
     label: `${member.firstname} ${member.lastname}`,
   }));
+  const visibleMembers = members
+    .filter((member) => `${member.firstname} ${member.lastname}`.toLocaleLowerCase().includes(memberSearch.trim().toLocaleLowerCase()))
+    .slice()
+    .sort((first, second) => `${first.firstname} ${first.lastname}`.localeCompare(`${second.firstname} ${second.lastname}`, 'fr', { sensitivity: 'base' }));
+  const profileParent = members.find((member) => member.id === form.parentId) ?? null;
+  const profileSpouse = members.find((member) => member.id === form.spouseId) ?? null;
+  const profileChildren = form.id ? members.filter((member) => member.parentId === form.id) : [];
+  const familyConnections = [
+    ...(profileParent ? [{ label: profileParent.gender === 'F' ? 'Mère' : 'Père', member: profileParent }] : []),
+    ...(profileSpouse ? [{ label: 'Conjoint(e)', member: profileSpouse }] : []),
+    ...profileChildren.map((member) => ({ label: member.gender === 'F' ? 'Fille' : 'Fils', member })),
+  ];
+  const familySlides = [
+    ...(profileParent ? [{ label: profileParent.gender === 'F' ? 'Mère' : 'Père', member: profileParent }] : []),
+    ...members
+      .filter((member) => member.id !== form.id && !!form.parentId && member.parentId === form.parentId)
+      .map((member) => ({ label: member.gender === 'F' ? 'Sœur' : 'Frère', member })),
+  ];
+  const renderedFamilySlides = familySlides.length > 1
+    ? [...familySlides, ...familySlides.slice(0, Math.min(2, familySlides.length))]
+    : familySlides;
+  const activeFamilySlide = familySlides.length ? familySlideIndex % familySlides.length : 0;
+
+  useEffect(() => {
+    if (familySlides.length < 2) return;
+    const timer = window.setInterval(() => {
+      setFamilySlideIndex((index) => (index + 1) % familySlides.length);
+    }, 4200);
+    return () => window.clearInterval(timer);
+  }, [familySlides.length, form.parentId, form.id]);
+
+  const showFamilySlide = (index: number) => {
+    setFamilySlideIndex((index + familySlides.length) % familySlides.length);
+  };
 
   const set = <K extends keyof Member>(key: K, value: Member[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -119,18 +172,114 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
     onDelete(editingMember.id);
   };
 
+  const handleProfileSave = async () => {
+    const trimmedName = profileName.trim();
+    if (!trimmedName || trimmedName.length > 80) {
+      setProfileError('Le nom affiché doit contenir entre 1 et 80 caractères.');
+      return;
+    }
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      await onSaveProfile(trimmedName);
+      setEditingProfile(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Modification du profil impossible.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   return (
-    <Modal open={open} onClose={onClose} boxStyle={{ maxWidth: 700 }} className="member-edit-modal">
+    <Modal open={open} onClose={onClose} boxStyle={{ maxWidth: 520 }} className="member-edit-modal member-side-panel" overlayClassName="side-panel-overlay">
       <form className="member-form d-flex flex-column" onSubmit={handleSave} noValidate>
-        <div className="modal-header">
-          <div>
-            <p className="member-modal-eyebrow">DOSSIER FAMILIAL</p>
-            <h2 className="modal-title">{isEditing ? 'Modifier le profil' : 'Nouveau profil'}</h2>
+        <header className="tree-sidebar-header">
+          <button type="button" className="sidebar-icon-button sidebar-collapse-button" onClick={onViewTree} aria-label="Réduire le panneau" title="Réduire">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6" /><path d="M19 6v12" /></svg>
+          </button>
+          <div className="tree-sidebar-heading">
+            {editingProfile && account ? (
+              <label className="side-panel-profile-edit"><span className="visually-hidden">Nom affiché</span><input maxLength={80} value={profileName} onChange={(event) => setProfileName(event.target.value)} autoFocus /></label>
+            ) : <strong>{isAuthenticated && account ? account.displayName : treeName}</strong>}
+            <span>{members.length} membre{members.length === 1 ? '' : 's'}</span>
           </div>
-          <button type="button" className="modal-close" onClick={onClose}>✕</button>
+          {isAuthenticated && account && (editingProfile ? (
+            <div className="side-panel-profile-actions">
+              <button type="button" className="btn-ghost" onClick={() => { setEditingProfile(false); setProfileName(account.displayName); setProfileError(''); }}>Annuler</button>
+              <button type="button" className="btn-primary" onClick={handleProfileSave} disabled={profileSaving}>{profileSaving ? 'Enregistrement…' : 'Enregistrer'}</button>
+            </div>
+          ) : (
+            <button type="button" className="side-panel-edit-profile" onClick={() => setEditingProfile(true)} title="Modifier le nom affiché" aria-label="Modifier le nom affiché">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+            </button>
+          ))}
+          {/* <button type="button" className="sidebar-tree-button" onClick={onViewTree}>
+            Voir l'arbre <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" /></svg>
+          </button> */}
+          
+        </header>
+        {isAuthenticated && (
+          <div className="tree-sidebar-tabs" role="tablist" aria-label="Panneau de l'arbre">
+            <button type="button" role="tab" aria-selected={activeTab === 'form'} className={activeTab === 'form' ? 'active' : ''} onClick={() => setActiveTab('form')}>
+              {isEditing ? 'Modifier' : 'Ajouter'}
+            </button>
+            <button type="button" role="tab" aria-selected={activeTab === 'members'} className={activeTab === 'members' ? 'active' : ''} onClick={() => setActiveTab('members')}>
+              Membres ({members.length})
+            </button>
+          </div>
+        )}
+        {profileError && <p className="sidebar-profile-error" role="alert">{profileError}</p>}
+        {isAuthenticated && activeTab === 'form' ? <>
+        <div className="tree-sidebar-form-heading member-editor-heading">
+          <div>
+            <span className="member-editor-kicker">{isEditing ? 'PROFIL FAMILIAL' : 'NOUVEAU PROFIL'}</span>
+            <h2>{isEditing ? `Modifier ${form.firstname || 'le membre'}` : 'Nouveau membre'}</h2>
+          </div>
+          <span>{isEditing ? 'Modification' : 'Création'}</span>
         </div>
         <div className="modal-body member-modal-body">
           <PhotoUpload photo={form.photo} firstname={form.firstname} onChange={(p) => updateField('photo', p)} />
+
+          <section className="member-profile-overview" aria-label="Résumé du membre">
+            <div className="member-profile-stats">
+              <div className="member-profile-stat"><span>Naissance</span><strong>{form.birth ? form.birth.slice(0, 4) : '—'}</strong></div>
+              <div className="member-profile-stat"><span>Genre</span><strong>{form.gender === 'F' ? 'Femme' : form.gender === 'M' ? 'Homme' : 'Autre'}</strong></div>
+              <div className="member-profile-stat"><span>Liens</span><strong>{familyConnections.length}</strong></div>
+            </div>
+            <section className="member-profile-connections" aria-label="Parents et fratrie">
+              <div className="member-profile-connections-heading">
+                <div>
+                  <h3>Parents et fratrie</h3>
+                  <span>{familySlides.length} membre{familySlides.length === 1 ? '' : 's'}</span>
+                </div>
+                {familySlides.length > 1 && <div className="member-family-carousel-controls">
+                  <button type="button" onClick={() => showFamilySlide(activeFamilySlide - 1)} aria-label="Membres précédents">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                  </button>
+                  <button type="button" onClick={() => showFamilySlide(activeFamilySlide + 1)} aria-label="Membres suivants">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                  </button>
+                </div>}
+              </div>
+              {familySlides.length ? <>
+                <div className="member-family-carousel-window">
+                  <div className="member-family-carousel-track" style={{ transform: `translateX(-${activeFamilySlide * 148}px)` }}>
+                    {renderedFamilySlides.map(({ label, member }, index) => (
+                    <div className="member-profile-connection" key={`${label}-${member.id}-${index}`}>
+                      <div className="member-profile-connection-photo">
+                        {member.photo ? <img src={member.photo} alt={`${member.firstname} ${member.lastname}`} /> : <span>{`${member.firstname.slice(0, 1)}${member.lastname.slice(0, 1)}`.toLocaleUpperCase()}</span>}
+                      </div>
+                      <div className="member-profile-connection-copy"><strong>{member.firstname} {member.lastname}</strong><small>{label}</small></div>
+                    </div>
+                    ))}
+                  </div>
+                </div>
+                {familySlides.length > 1 && <div className="member-family-carousel-dots" aria-label={`Membre ${activeFamilySlide + 1} sur ${familySlides.length}`}>
+                  {familySlides.map((slide, index) => <button type="button" key={`${slide.label}-${slide.member.id}`} className={index === activeFamilySlide ? 'active' : ''} onClick={() => showFamilySlide(index)} aria-label={`Afficher ${slide.member.firstname} ${slide.member.lastname}`} />)}
+                </div>}
+              </> : <p className="member-profile-no-connections">Choisissez un parent pour afficher ses enfants et leur fratrie.</p>}
+            </section>
+          </section>
 
           <section className="member-form-section">
             <h3 className="member-section-title">Identité</h3>
@@ -284,20 +433,34 @@ export default function MemberModal({ open, editingMember, defaultParentId, memb
           </section>
           {saveError && <p className="form-error" role="alert">{saveError}</p>}
         </div>
-        <div className="modal-footer">
+        <div className="modal-footer member-editor-footer">
           {isEditing && (
-            <button type="button" className="btn-danger" onClick={handleDelete}>
+            <button type="button" className="btn-danger member-editor-delete" onClick={handleDelete}>
               Supprimer
             </button>
           )}
-          <div className="ms-auto flex-grow-1" />
-          <button type="button" className="btn-ghost" onClick={onClose}>
+          <button type="button" className="btn-ghost member-editor-cancel" onClick={onClose}>
             Annuler
           </button>
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          <button type="submit" className="btn-primary member-editor-save" disabled={saving}>
+            {saving ? 'Enregistrement…' : isEditing ? 'Enregistrer les modifications' : 'Créer le profil'}
           </button>
         </div>
+        </> : <section className="tree-sidebar-members" role="tabpanel">
+          <label className="tree-sidebar-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+            <span className="visually-hidden">Rechercher un membre</span>
+            <input type="search" value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Rechercher un membre" />
+          </label>
+          <div className="tree-sidebar-member-list">
+            {visibleMembers.length ? visibleMembers.map((member) => (
+              <button type="button" className="tree-sidebar-member" key={member.id} onClick={() => onEditMember(member.id)} aria-label={`${isAuthenticated ? 'Modifier' : 'Voir'} ${member.firstname} ${member.lastname}`}>
+                <span className="tree-sidebar-member-avatar">{`${member.firstname.slice(0, 1)}${member.lastname.slice(0, 1)}`.toLocaleUpperCase()}</span>
+                <span><strong>{member.firstname} {member.lastname}</strong><small>Membre</small></span>
+              </button>
+            )) : <p className="tree-sidebar-empty">Aucun membre trouvé.</p>}
+          </div>
+        </section>}
       </form>
     </Modal>
   );

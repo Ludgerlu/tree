@@ -56,6 +56,41 @@ function compressImage(file: File, maxWidth: number, maxHeight: number, quality:
   });
 }
 
+function blobToFile(blob: Blob, originalName: string): File {
+  const baseName = originalName.replace(/\.[^.]+$/, '') || 'photo';
+  return new File([blob], `${baseName}_compressed.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+}
+
+export interface CompressedUpload {
+  file: File;
+  originalKB: number;
+  newKB: number;
+  pct: number;
+}
+
+export async function processGalleryImage(file: File): Promise<CompressedUpload> {
+  const isHEIC = file.type === 'image/heic' || file.type === 'image/heif' || /\.(heic|heif)$/i.test(file.name);
+  if (isHEIC) throw new Error('HEIC n’est pas pris en charge. Choisissez JPG, PNG ou WebP.');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Format non pris en charge. Choisissez une image JPG, PNG ou WebP.');
+  }
+  if (file.size > 10 * 1024 * 1024) throw new Error('Photo trop volumineuse (max 10 Mo avant compression).');
+
+  const connection = (navigator as any).connection;
+  const slowConnection = connection?.effectiveType === '2g' || connection?.effectiveType === 'slow-2g';
+  const quality = slowConnection ? 0.62 : file.size > 4 * 1024 * 1024 ? 0.7 : 0.8;
+  const maxWidth = slowConnection ? 1000 : 1600;
+  const maxHeight = slowConnection ? 1000 : 1200;
+  const blob = await compressImage(file, maxWidth, maxHeight, quality);
+  const compressedFile = blobToFile(blob, file.name);
+  return {
+    file: compressedFile,
+    originalKB: Math.round(file.size / 1024),
+    newKB: Math.round(compressedFile.size / 1024),
+    pct: Math.max(0, Math.round((1 - compressedFile.size / file.size) * 100)),
+  };
+}
+
 function blobToDataURL(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -105,7 +140,7 @@ export async function processPhotoFile(file: File): Promise<PhotoCompressionResu
 
   const blob = await compressImage(file, maxW, maxH, quality);
   const dataUrl = await blobToDataURL(blob);
-  const pct = Math.round((1 - blob.size / file.size) * 100);
+  const pct = Math.max(0, Math.round((1 - blob.size / file.size) * 100));
 
   return {
     dataUrl,

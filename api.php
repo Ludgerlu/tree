@@ -102,6 +102,24 @@ $pdo->exec("
         updated_at  TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (member_id) REFERENCES membres(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS albums (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        title       TEXT NOT NULL,
+        description TEXT,
+        event_date  TEXT,
+        created_by  INTEGER,
+        created_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS album_images (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        album_id    INTEGER NOT NULL,
+        photo_file  TEXT NOT NULL,
+        caption     TEXT,
+        created_at  TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE
+    );
 ");
 
 /* ─── Utilisateur admin par défaut (première exécution) ── */
@@ -174,8 +192,21 @@ switch ($action) {
         jsonOk([
             'message'      => 'Connecté',
             'display_name' => $_SESSION['display_name'],
+            'username'     => $_SESSION['username'],
             'role'         => $_SESSION['role'],
         ]);
+        break;
+
+    case 'update_profile':
+        requireAuth();
+        $displayName = trim($body['display_name'] ?? '');
+        if ($displayName === '' || mb_strlen($displayName) > 80) {
+            jsonError('Le nom affiché doit contenir entre 1 et 80 caractères.', 422);
+        }
+        $pdo->prepare("UPDATE utilisateurs SET display_name = ? WHERE id = ?")
+            ->execute([$displayName, $_SESSION['user_id']]);
+        $_SESSION['display_name'] = $displayName;
+        jsonOk(['message' => 'Profil modifié.', 'display_name' => $displayName]);
         break;
 
     case 'logout':
@@ -580,6 +611,98 @@ switch ($action) {
         jsonOk(['message' => 'Photo de famille supprimée', 'deleted_id' => $id]);
         break;
 
+    case 'delete_family_photo_by_id':
+        requireAuth();
+        $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$id) jsonError('Identifiant de photo manquant.', 400);
+        $stmt = $pdo->prepare("SELECT photo_file FROM photos_famille WHERE id = ?");
+        $stmt->execute([$id]);
+        $photo = $stmt->fetch();
+        if ($photo) {
+            deletePhotoFile($photo['photo_file']);
+            $pdo->prepare("DELETE FROM photos_famille WHERE id = ?")->execute([$id]);
+        }
+        jsonOk(['message' => 'Photo de famille supprimée.']);
+        break;
+
+    /* ══════════════════════════════════════════════
+       GALERIE ET ALBUMS
+    ══════════════════════════════════════════════ */
+
+    case 'get_gallery':
+        $albums = $pdo->query("SELECT a.*, COUNT(i.id) AS image_count
+            FROM albums a LEFT JOIN album_images i ON i.album_id = a.id
+            GROUP BY a.id ORDER BY a.event_date DESC, a.created_at DESC")->fetchAll();
+        $albums = array_map('rowToAlbum', $albums);
+        $images = $pdo->query("SELECT * FROM album_images ORDER BY created_at DESC")->fetchAll();
+        $images = array_map('rowToAlbumImage', $images);
+        $familyPhotos = $pdo->query("SELECT * FROM photos_famille ORDER BY created_at DESC")->fetchAll();
+        $familyPhotos = array_map('rowToFamilyPhoto', $familyPhotos);
+        jsonOk(['albums' => $albums, 'images' => $images, 'familyPhotos' => $familyPhotos]);
+        break;
+
+    case 'create_album':
+        requireAdmin();
+        $title = trim($body['title'] ?? '');
+        $description = trim($body['description'] ?? '');
+        $eventDate = trim($body['eventDate'] ?? '');
+        if ($title === '' || mb_strlen($title) > 120) jsonError('Le titre doit contenir entre 1 et 120 caractères.', 422);
+        if (mb_strlen($description) > 1000) jsonError('La description est trop longue.', 422);
+        if ($eventDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) jsonError('La date est invalide.', 422);
+        $stmt = $pdo->prepare("INSERT INTO albums (title, description, event_date, created_by) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$title, $description ?: null, $eventDate ?: null, $_SESSION['user_id']]);
+        $albumId = (int)$pdo->lastInsertId();
+        $stmt = $pdo->prepare("SELECT a.*, 0 AS image_count FROM albums a WHERE a.id = ?");
+        $stmt->execute([$albumId]);
+        jsonOk(['album' => rowToAlbum($stmt->fetch()), 'message' => 'Album créé.']);
+        break;
+
+    case 'upload_album_image':
+        requireAdmin();
+        $albumId = filter_var($body['albumId'] ?? null, FILTER_VALIDATE_INT);
+        if (!$albumId) jsonError('Album introuvable.', 422);
+        $stmt = $pdo->prepare("SELECT id FROM albums WHERE id = ?");
+        $stmt->execute([$albumId]);
+        if (!$stmt->fetch()) jsonError('Album introuvable.', 404);
+        $photoFile = storeUploadedImage('photo');
+        $caption = trim($body['caption'] ?? '');
+        $stmt = $pdo->prepare("INSERT INTO album_images (album_id, photo_file, caption) VALUES (?, ?, ?)");
+        $stmt->execute([$albumId, $photoFile, $caption ?: null]);
+        jsonOk(['image' => [
+            'id' => (int)$pdo->lastInsertId(),
+            'albumId' => (int)$albumId,
+            'photoFile' => $photoFile,
+            'photo' => UPLOADS_URL . $photoFile,
+            'caption' => $caption ?: null,
+        ], 'message' => 'Photo ajoutée à l’album.']);
+        break;
+
+    case 'delete_album_image':
+        requireAdmin();
+        $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$id) jsonError('Identifiant de photo manquant.', 400);
+        $stmt = $pdo->prepare("SELECT photo_file FROM album_images WHERE id = ?");
+        $stmt->execute([$id]);
+        $image = $stmt->fetch();
+        if ($image) {
+            deletePhotoFile($image['photo_file']);
+            $pdo->prepare("DELETE FROM album_images WHERE id = ?")->execute([$id]);
+        }
+        jsonOk(['message' => 'Photo supprimée de l’album.']);
+        break;
+
+    case 'delete_album':
+        requireAdmin();
+        $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$id) jsonError('Identifiant d’album manquant.', 400);
+        $stmt = $pdo->prepare("SELECT photo_file FROM album_images WHERE album_id = ?");
+        $stmt->execute([$id]);
+        foreach ($stmt->fetchAll() as $image) deletePhotoFile($image['photo_file']);
+        $pdo->prepare("DELETE FROM album_images WHERE album_id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM albums WHERE id = ?")->execute([$id]);
+        jsonOk(['message' => 'Album supprimé.']);
+        break;
+
 
     /* ══════════════════════════════════════════════
        PARAMÈTRES
@@ -607,9 +730,13 @@ switch ($action) {
         foreach ($rows as $r) deletePhotoFile($r['photo_file']);
         $fpRows = $pdo->query("SELECT photo_file FROM photos_famille")->fetchAll();
         foreach ($fpRows as $r) deletePhotoFile($r['photo_file']);
+        $albumRows = $pdo->query("SELECT photo_file FROM album_images")->fetchAll();
+        foreach ($albumRows as $r) deletePhotoFile($r['photo_file']);
 
         $pdo->exec("DELETE FROM membres");
         $pdo->exec("DELETE FROM photos_famille");
+        $pdo->exec("DELETE FROM album_images");
+        $pdo->exec("DELETE FROM albums");
         $pdo->exec("UPDATE parametres SET valeur = 'Ma Famille' WHERE cle = 'treeName'");
         jsonOk(['message' => 'Données effacées']);
         break;
@@ -751,4 +878,51 @@ function jsonError(string $msg, int $code = 400): void {
     http_response_code($code);
     echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+function rowToAlbum(array $row): array {
+    return [
+        'id' => (int)$row['id'],
+        'title' => $row['title'],
+        'description' => $row['description'] ?? null,
+        'eventDate' => $row['event_date'] ?? null,
+        'imageCount' => (int)($row['image_count'] ?? 0),
+        'createdAt' => $row['created_at'] ?? null,
+    ];
+}
+
+function rowToAlbumImage(array $row): array {
+    return [
+        'id' => (int)$row['id'],
+        'albumId' => (int)$row['album_id'],
+        'photoFile' => $row['photo_file'],
+        'photo' => UPLOADS_URL . $row['photo_file'],
+        'caption' => $row['caption'] ?? null,
+        'createdAt' => $row['created_at'] ?? null,
+    ];
+}
+
+function storeUploadedImage(string $field): string {
+    if (empty($_FILES[$field]) || $_FILES[$field]['error'] !== UPLOAD_ERR_OK) {
+        $errorCode = $_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE;
+        jsonError('Erreur upload : ' . uploadErrorMessage($errorCode), 400);
+    }
+    $file = $_FILES[$field];
+    if ($file['size'] > MAX_PHOTO_SIZE) jsonError('Photo trop volumineuse (max 5 Mo côté serveur).', 413);
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($file['tmp_name']);
+    $mimeToExt = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+    if (!isset($mimeToExt[$mime]) || !@getimagesize($file['tmp_name'])) {
+        jsonError('Format non autorisé ou image invalide. Utilisez JPG, PNG, GIF ou WebP.', 415);
+    }
+    $filename = bin2hex(random_bytes(16)) . '.' . $mimeToExt[$mime];
+    $destination = UPLOADS_DIR . $filename;
+    if (!move_uploaded_file($file['tmp_name'], $destination)) jsonError('Impossible d’enregistrer le fichier uploadé.', 500);
+    chmod($destination, 0644);
+    return $filename;
+}
+
+function requireAdmin(): void {
+    requireAuth();
+    if (($_SESSION['role'] ?? '') !== 'admin') jsonError('Action réservée à l’administrateur.', 403);
 }

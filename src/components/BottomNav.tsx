@@ -4,6 +4,7 @@ import { Member } from '../types';
 interface Props {
   onHome: () => void;
   onAdd: () => void;
+  onGallery: () => void;
   onExport: () => void;
   onSettings: () => void;
   memberCount: number;
@@ -22,7 +23,7 @@ const iconProps = {
   strokeLinejoin: 'round' as const,
 };
 
-export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSettings, members, onFocusMember }: Props) {
+export default function BottomNav({ memberCount, onHome, onAdd, onGallery, onExport, onSettings, members, onFocusMember }: Props) {
 
   const [searchOpen, setSearchOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -107,9 +108,9 @@ export default function BottomNav({ memberCount, onHome, onAdd, onExport, onSett
         </div>
         <span>membre{memberCount > 1 ? 's' : ''}</span>
       </button>
-      <button type="button" className="bottom-nav-item" onClick={onAdd}>
-        <svg {...iconProps}><circle cx="12" cy="8" r="3.5" /><path d="M5 20v-1a7 7 0 0 1 14 0v1M19 8v6m-3-3h6" /></svg>
-        <span>Ajouter</span>
+      <button type="button" className="bottom-nav-item" onClick={onGallery} aria-label="Ouvrir la galerie">
+        <svg {...iconProps}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9" r="1.5" /><path d="m21 15-5-5L5 20" /></svg>
+        <span>Galerie</span>
       </button>
       {/* <button type="button" className="bottom-nav-item" onClick={onExport}>
         <svg {...iconProps}><path d="M12 15V3m-4 4 4-4 4 4" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></svg>

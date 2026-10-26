@@ -18,6 +18,7 @@ import AuthModal from '../components/AuthModal';
 import DetailModal from '../components/DetailModal';
 import SettingsModal from '../components/SettingsModal';
 import ExportModal from '../components/ExportModal';
+import GalleryModal from '../components/GalleryModal';
 import Toast from '../components/Toast';
 import LoadingOverlay from '../components/LoadingOverlay';
 import { Member } from '../types';
@@ -40,8 +41,8 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export default function TreePage() {
   const {
-    members, settings, isAuthenticated, loading, toast,
-    login, logout, addMember, updateMember, deleteMember,
+    members, settings, isAuthenticated, account, loading, toast, showToast,
+    login, logout, addMember, updateMember, deleteMember, updateProfile,
     saveSettings, importData, clearAll,
     collapsedIds, toggleCollapse, expandTo,
   } = useApp();
@@ -58,11 +59,18 @@ export default function TreePage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [highlightedMemberId, setHighlightedMemberId] = useState<string | null>(null);
 
   const openAdd = useCallback((parentId: string | null) => {
     setEditingMember(null);
     setDefaultParentId(parentId);
+    setMemberModalOpen(true);
+  }, []);
+
+  const openProfile = useCallback(() => {
+    setEditingMember(null);
+    setDefaultParentId(null);
     setMemberModalOpen(true);
   }, []);
 
@@ -214,6 +222,7 @@ export default function TreePage() {
         onLogout={logout}
         onExport={() => setExportOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        onProfile={openProfile}
       />
       <LegendBar memberCount={members.length} />
 
@@ -247,6 +256,7 @@ export default function TreePage() {
         memberCount={members.length}
         onHome={fitView}
         onAdd={() => requestAdd(null)}
+        onGallery={() => setGalleryOpen(true)}
         onExport={() => setExportOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         members={members}
@@ -261,6 +271,15 @@ export default function TreePage() {
         onClose={() => setMemberModalOpen(false)}
         onSave={handleSaveMember}
         onDelete={requestDelete}
+        isAuthenticated={isAuthenticated}
+        account={account}
+        onSaveProfile={updateProfile}
+        treeName={settings.treeName}
+        onEditMember={(id) => {
+          if (isAuthenticated) openEdit(id);
+          else setDetailId(id);
+        }}
+        onViewTree={() => { setMemberModalOpen(false); fitView(); }}
       />
 
       <AuthModal open={authOpen} onClose={closeAuth} onSubmit={handleAuthSubmit} />
@@ -294,6 +313,15 @@ export default function TreePage() {
         onExportSVG={exportSVG}
         onExportJSON={exportJSON}
         onPrint={printTree}
+      />
+
+      <GalleryModal
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        members={members}
+        isAuthenticated={isAuthenticated}
+        isAdmin={account?.role === 'admin'}
+        showToast={showToast}
       />
 
       <Toast message={toast.message} visible={toast.visible} />

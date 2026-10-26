@@ -45,10 +45,17 @@ interface ToastState {
   visible: boolean;
 }
 
+interface AccountInfo {
+  displayName: string;
+  username: string;
+  role: string;
+}
+
 interface AppContextValue {
   members: Member[];
   settings: Settings;
   isAuthenticated: boolean;
+  account: AccountInfo | null;
   loading: boolean;
   toast: ToastState;
   collapsedIds: Set<string>;
@@ -56,6 +63,7 @@ interface AppContextValue {
   expandTo: (id: string, includeSelf?: boolean) => void;
   showToast: (msg: string) => void;
   login: (username: string, password: string) => Promise<void>;
+  updateProfile: (displayName: string) => Promise<void>;
   logout: () => void;
   addMember: (m: Member) => Promise<void>;
   updateMember: (m: Member) => Promise<void>;
@@ -71,6 +79,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [account, setAccount] = useState<AccountInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(loadCollapsed);
   const hasSavedCollapseState = useRef(window.localStorage.getItem(COLLAPSED_KEY) !== null);
@@ -118,6 +127,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCollapsedIds(defaultCollapsedIds);
       }
       setSettings(loadedSettings);
+      if (data.auth?.logged_in) {
+        setIsAuthenticated(true);
+        setAccount({
+          displayName: data.auth.display_name || data.auth.username || '',
+          username: data.auth.username || '',
+          role: data.auth.role || 'editor',
+        });
+      } else {
+        setIsAuthenticated(false);
+        setAccount(null);
+      }
     } catch (e) {
       // Si l'API est inaccessible, on démarre avec un tableau vide (comme l'ancien comportement)
       setMembers([]);
@@ -140,8 +160,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (username: string, password: string) => {
-      const res = await api.login(username, password); // laisse l'erreur remonter à l'appelant (modale d'auth)
+      const res = await api.login(username, password);
       setIsAuthenticated(true);
+      setAccount({ displayName: res.display_name, username: res.username, role: res.role });
       showToast(res.message || 'Connecté.');
     },
     [showToast]
@@ -149,8 +170,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     setIsAuthenticated(false);
+    setAccount(null);
     showToast('Déconnecté.');
   }, [showToast]);
+
+  const updateProfile = useCallback(async (displayName: string) => {
+    try {
+      const res = await api.updateProfile(displayName);
+      setAccount((current) => current ? { ...current, displayName: res.display_name } : current);
+      showToast(res.message || 'Profil modifié.');
+    } catch (e) {
+      handleError(e);
+      throw e;
+    }
+  }, [handleError, showToast]);
 
   const addMember = useCallback(
     async (m: Member) => {
@@ -288,6 +321,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     members,
     settings,
     isAuthenticated,
+    account,
     loading,
     toast: { message: toastMsg, visible: toastVisible },
     collapsedIds,
@@ -295,6 +329,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     expandTo,
     showToast,
     login,
+    updateProfile,
     logout,
     addMember,
     updateMember,
