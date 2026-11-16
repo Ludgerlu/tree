@@ -657,6 +657,28 @@ switch ($action) {
         jsonOk(['album' => rowToAlbum($stmt->fetch()), 'message' => 'Album créé.']);
         break;
 
+    case 'update_album':
+        requireAdmin();
+        $albumId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$albumId) jsonError('Identifiant d’album manquant.', 400);
+        $title = trim($body['title'] ?? '');
+        $description = trim($body['description'] ?? '');
+        $eventDate = trim($body['eventDate'] ?? '');
+        if ($title === '' || mb_strlen($title) > 120) jsonError('Le titre doit contenir entre 1 et 120 caractères.', 422);
+        if (mb_strlen($description) > 1000) jsonError('La description est trop longue.', 422);
+        if ($eventDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) jsonError('La date est invalide.', 422);
+        $stmt = $pdo->prepare("UPDATE albums SET title = ?, description = ?, event_date = ? WHERE id = ?");
+        $stmt->execute([$title, $description ?: null, $eventDate ?: null, $albumId]);
+        if ($stmt->rowCount() === 0) {
+            $exists = $pdo->prepare("SELECT id FROM albums WHERE id = ?");
+            $exists->execute([$albumId]);
+            if (!$exists->fetch()) jsonError('Album introuvable.', 404);
+        }
+        $stmt = $pdo->prepare("SELECT a.*, (SELECT COUNT(*) FROM album_images i WHERE i.album_id = a.id) AS image_count FROM albums a WHERE a.id = ?");
+        $stmt->execute([$albumId]);
+        jsonOk(['album' => rowToAlbum($stmt->fetch()), 'message' => 'Album modifié.']);
+        break;
+
     case 'upload_album_image':
         requireAdmin();
         $albumId = filter_var($body['albumId'] ?? null, FILTER_VALIDATE_INT);

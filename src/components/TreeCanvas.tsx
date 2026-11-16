@@ -166,9 +166,8 @@ export default function TreeCanvas({
     const ini = initials(m).toUpperCase();                            // Initiales du membre
     const photoId = `photo-clip-${m.id}`;                             // ID du clipPath pour la photo
     const hasPhoto = !!(m.photo && m.photo.length > 5);               // Le membre a une photo (URL non vide)
-    const cx = pos.x + PHOTO_R + 12;                                  // Décalage horizontal pour laisser de la place au texte
-    const cy = pos.y + NH / 2;                                        // Décalage vertical pour centrer le cercle de la photo
-    const textX = pos.x + PHOTO_R * 2 + 20;                           // Décalage horizontal pour le texte (à droite du cercle de la photo)
+    const cx = pos.x + NW / 2;                                        // Photo centrée au-dessus du nom
+    const cy = pos.y + 44;
     const isDim = !!focus && !focus.nodes.has(m.id);                  // Le nœud est-il hors du chemin du membre sélectionné ?
     const layer = layerFor(isDim);                                    // Choix de la couche (floutée ou nette) selon le focus
 
@@ -189,9 +188,9 @@ export default function TreeCanvas({
           onEditFromNode(m.id);
         }}
       >
-        <rect className="node-rect" x={pos.x} y={pos.y} width={NW} height={NH} rx={NRX} fill={colL} stroke={col} strokeWidth={1.8} />
-        <circle cx={cx} cy={cy} r={PHOTO_R} fill={col} opacity={0.15} />
-        <circle cx={cx} cy={cy} r={PHOTO_R} fill="none" stroke={col} strokeWidth={1.5} />
+        <rect className="node-rect" x={pos.x} y={pos.y} width={NW} height={NH} rx={NRX} fill="#ffffff" stroke="#e3e5e1" strokeWidth={1.2} />
+        <circle cx={cx} cy={cy} r={PHOTO_R} fill="#f0f1ed" />
+        <circle cx={cx} cy={cy} r={PHOTO_R} fill="none" stroke="#ffffff" strokeWidth={2} />
         {hasPhoto ? (
           <image
             href={m.photo!}
@@ -219,46 +218,32 @@ export default function TreeCanvas({
           </text>
         )}
         <text
-          x={textX}
-          y={pos.y + NH / 2 - 9}
-          fill={col}
-          fontFamily="'Cormorant Garamond', Georgia, serif"
-          fontSize={25}
-          fontWeight={800}
-          style={{ pointerEvents: 'none' }}
+          x={cx}
+            y={pos.y + 108}
+          textAnchor="middle"
+          fill="#1c241d"
+          fontFamily="'DM Sans', system-ui, sans-serif"
+          fontSize={14}
+          fontWeight={700}
+          style={{ pointerEvents: 'none', textTransform: 'uppercase' }}
         >
-          <tspan>{truncate(m.firstname, 12)}</tspan>
+          <tspan>{truncate(m.firstname, 16)}</tspan>
         </text>
         <text
-          x={textX}
-          y={pos.y + NH / 2 + 7}
-          fill={col}
-          fontFamily="'Cormorant Garamond', Georgia, serif"
-          fontSize={15}
-          fontWeight={1200}
+          x={cx}
+          y={pos.y + 128}
+          textAnchor="middle"
+          fill="#1c241d"
+          fontFamily="'DM Sans', system-ui, sans-serif"
+          fontSize={13}
+          fontWeight={700}
           style={{ pointerEvents: 'none' , textTransform: 'uppercase' }}
         >
-          <tspan>{truncate(m.lastname, 14)}</tspan>
+          <tspan>{truncate(m.lastname, 18)}</tspan>
         </text>
-        {m.birth && (
-          <text
-            x={textX}
-            y={pos.y + NH / 2 + 22}
-            fill={col}
-            opacity={8}
-            fontFamily="'Inter', system-ui, sans-serif"
-            fontSize={10}
-            style={{ pointerEvents: 'none' }}
-          >
-            <tspan>
-              {m.birth.slice(0, 4)}
-              {m.death ? `–${m.death.slice(0, 4)}` : ''}
-            </tspan>
-          </text>
-        )}
         {m.death && (
-          <text x={pos.x + NW - 10} y={pos.y + 16} fill={col} opacity={0.5} fontSize={11} textAnchor="middle" style={{ pointerEvents: 'none' }}>
-            †
+          <text x={pos.x + NW - 14} y={pos.y + 19} fill="#65745f" opacity={0.9} fontSize={16} fontWeight={700} textAnchor="middle" style={{ pointerEvents: 'none' }}>
+            ✝
           </text>
         )}
       </g>

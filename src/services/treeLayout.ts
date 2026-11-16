@@ -6,12 +6,12 @@
 import { Member, Settings, Position } from '../types';
 import { ThemeDefinition } from '../types/theme';
 
-export const NW = 200;          // largeur d'un nœud
-export const NH = 90;          // hauteur d'un nœud
+export const NW = 150;          // largeur d'un nœud
+export const NH = 150;          // hauteur d'un nœud
 export const NRX = 10;        // border-radius
 export const GAP_X = 60;     // écart horizontal entre nœuds
 export const GAP_Y = 100;   // écart vertical entre nœuds
-export const PHOTO_R = 22; // rayon de la photo (cercle)
+export const PHOTO_R = 39; // rayon de la photo (cercle)
 
 export function getGen(id: string, members: Member[], memo: Record<string, number> = {}): number {
   if (id in memo) return memo[id];

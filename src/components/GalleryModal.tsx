@@ -25,12 +25,15 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
   const [albumTitle, setAlbumTitle] = useState('');
   const [albumDescription, setAlbumDescription] = useState('');
   const [albumDate, setAlbumDate] = useState('');
+  const [editingAlbum, setEditingAlbum] = useState(false);
+  const [savingAlbum, setSavingAlbum] = useState(false);
   const [familyMemberId, setFamilyMemberId] = useState('');
   const [familyStory, setFamilyStory] = useState('');
   const [familyYear, setFamilyYear] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
+  const [uploadCount, setUploadCount] = useState({ current: 0, total: 0 });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -58,10 +61,18 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
   useEffect(() => {
     if (!open) return;
     setTab('albums');
+    setEditingAlbum(false);
     setError('');
     setNotice('');
     void loadGallery();
   }, [open]);
+
+  useEffect(() => {
+    if (!selectedAlbumDetails || editingAlbum) return;
+    setAlbumTitle(selectedAlbumDetails.title);
+    setAlbumDescription(selectedAlbumDetails.description || '');
+    setAlbumDate(selectedAlbumDetails.eventDate || '');
+  }, [selectedAlbumDetails, editingAlbum]);
 
   const handleCreateAlbum = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,6 +95,27 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
     }
   };
 
+  const handleUpdateAlbum = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedAlbum || !albumTitle.trim() || savingAlbum) return;
+    setSavingAlbum(true);
+    setError('');
+    try {
+      const result = await api.updateAlbum(selectedAlbum, {
+        title: albumTitle.trim(),
+        description: albumDescription.trim(),
+        eventDate: albumDate,
+      });
+      setAlbums((current) => current.map((album) => album.id === result.album.id ? result.album : album));
+      setNotice(result.message);
+      setEditingAlbum(false);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'La modification de l’album a échoué.');
+    } finally {
+      setSavingAlbum(false);
+    }
+  };
+
   const handleAlbumFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const albumId = selectedAlbum;
@@ -93,13 +125,15 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
     setError('');
     let saved = 0;
     let reducedBytes = 0;
+    setUploadCount({ current: 0, total: files.length });
     try {
       for (let index = 0; index < files.length; index += 1) {
-        setUploadProgress(`Compression et envoi ${index + 1}/${files.length}`);
+        setUploadProgress(`Compression et envoi ${index + 1} / ${files.length}`);
         const compressed = await processGalleryImage(files[index]);
         reducedBytes += Math.max(0, files[index].size - compressed.file.size);
         await api.uploadAlbumImage(albumId, compressed.file);
         saved += 1;
+        setUploadCount({ current: saved, total: files.length });
       }
       showToast(`${saved} photo${saved > 1 ? 's' : ''} optimisée${saved > 1 ? 's' : ''} · ${Math.round(reducedBytes / 1024)} Ko économisés`);
       setNotice('Photos ajoutées à l’album.');
@@ -110,6 +144,7 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
     } finally {
       setUploading(false);
       setUploadProgress('');
+      setUploadCount({ current: 0, total: 0 });
     }
   };
 
@@ -121,6 +156,7 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
     setUploading(true);
     setError('');
     setUploadProgress('Compression et envoi…');
+    setUploadCount({ current: 0, total: 1 });
     try {
       const compressed = await processGalleryImage(file);
       const uploaded = await api.uploadFamilyPhoto(compressed.file);
@@ -130,6 +166,7 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
         histoire: familyStory.trim(),
         annee: familyYear.trim(),
       });
+      setUploadCount({ current: 1, total: 1 });
       setFamilyPhotos((current) => [saved.photo, ...current]);
       setFamilyStory('');
       setFamilyYear('');
@@ -143,7 +180,22 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
     } finally {
       setUploading(false);
       setUploadProgress('');
+      setUploadCount({ current: 0, total: 0 });
     }
+  };
+
+  const renderUploadProgress = () => {
+    if (!uploading || uploadCount.total === 0) return null;
+    const percentage = Math.round((uploadCount.current / uploadCount.total) * 100);
+    return <div className="gallery-upload-progress" role="status" aria-live="polite">
+      <div className="gallery-upload-progress-label">
+        <span>{uploadProgress}</span>
+        <strong>{uploadCount.current} / {uploadCount.total}</strong>
+      </div>
+      <div className="gallery-upload-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={uploadCount.total} aria-valuenow={uploadCount.current} aria-label="Progression de l’envoi">
+        <span style={{ width: `${percentage}%` }} />
+      </div>
+    </div>;
   };
 
   const removeAlbumImage = async (image: GalleryImage) => {
@@ -189,10 +241,10 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           <span>Retour aux albums</span>
         </button>}
-        <div>
-          <p className="gallery-eyebrow">{selectedAlbum ? 'SOUVENIR DE FAMILLE' : 'SOUVENIRS DE FAMILLE'}</p>
+        {editingAlbum ? <div className="gallery-header-editing-title"><span>MODIFIER L’ALBUM</span><strong>{selectedAlbumDetails?.title}</strong></div> : <div>
+          {/* <p className="gallery-eyebrow">{selectedAlbum ? 'SOUVENIR DE FAMILLE' : 'SOUVENIRS DE FAMILLE'}</p> */}
           <h2>{selectedAlbumDetails?.title || 'Galerie'}</h2>
-        </div>
+        </div>}
         <button type="button" className="modal-close" onClick={onClose} aria-label="Fermer la galerie">×</button>
       </div>
       {!selectedAlbum && <div className="gallery-tabs" role="tablist" aria-label="Types de photos">
@@ -209,6 +261,7 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
           <button type="button" className="btn-close" onClick={() => setNotice('')} aria-label="Fermer l’alerte" />
         </div>}
       </div>}
+      {renderUploadProgress()}
       <div className="gallery-content">
         {loading ? <p className="gallery-empty">Chargement de la galerie…</p> : tab === 'albums' ? <>
           {isAdmin && !selectedAlbum && (
@@ -223,7 +276,16 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
             </form>
           )}
           {selectedAlbum ? <>
-            <section className="gallery-viewer" aria-label={`Photos de ${selectedAlbumDetails?.title || 'l’album'}`}>
+            {editingAlbum && isAdmin ? <form className="gallery-edit-album" onSubmit={handleUpdateAlbum}>
+              <h3>Informations de l’événement</h3>
+              <label>Nom de l’album<input required maxLength={120} value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} /></label>
+              <label>Date de l’événement<input type="date" value={albumDate} onChange={(event) => setAlbumDate(event.target.value)} /></label>
+              <label>Description<textarea rows={4} maxLength={1000} value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} /></label>
+              <div className="gallery-edit-actions">
+                <button type="button" className="btn-ghost" onClick={() => { setEditingAlbum(false); setError(''); }}>Annuler</button>
+                <button type="submit" className="btn-primary" disabled={savingAlbum}>{savingAlbum ? 'Enregistrement…' : 'Enregistrer'}</button>
+              </div>
+            </form> : <section className="gallery-viewer" aria-label={`Photos de ${selectedAlbumDetails?.title || 'l’album'}`}>
               {selectedImage ? <>
                 <div className="gallery-viewer-photo-wrap">
                   <img className="gallery-viewer-photo" src={selectedImage.photo} alt={selectedImage.caption || selectedAlbumDetails?.title || 'Photo de l’album'} />
@@ -253,13 +315,17 @@ export default function GalleryModal({ open, onClose, members, isAuthenticated, 
                 </label>}
               </div>}
               <div className="gallery-viewer-actions">
+                {isAdmin && selectedAlbumDetails && <button type="button" className="gallery-edit-album-button" onClick={() => setEditingAlbum(true)} aria-label="Modifier les informations de l’album">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                  Modifier l’album
+                </button>}
                 {isAdmin && <label className={`gallery-upload-button${uploading ? ' disabled' : ''}`}>
                   <span>{uploading ? uploadProgress : 'Ajouter des photos'}</span>
                   <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploading} onChange={handleAlbumFiles} />
                 </label>}
                 {isAdmin && selectedAlbumDetails && <button type="button" className="gallery-delete-album" onClick={() => void removeAlbum(selectedAlbumDetails)}>Supprimer l’album</button>}
               </div>
-            </section>
+            </section>}
           </> : <div className="gallery-album-grid">
             {albums.map((album) => {
               const albumImages = images.filter((image) => image.albumId === album.id);

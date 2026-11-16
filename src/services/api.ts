@@ -88,6 +88,9 @@ export const api = {
   createAlbum: (album: { title: string; description: string; eventDate: string }) =>
     request<{ album: Album; message: string }>('create_album', album),
 
+  updateAlbum: (id: number, album: { title: string; description: string; eventDate: string }) =>
+    request<{ album: Album; message: string }>('update_album', { id: String(id), ...album }),
+
   uploadAlbumImage: (albumId: number, file: File, caption = '') =>
     upload<{ image: GalleryImage; message: string }>('upload_album_image', { albumId: String(albumId), caption }, file),
 
